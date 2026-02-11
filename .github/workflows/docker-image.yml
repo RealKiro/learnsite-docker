@@ -1,4 +1,4 @@
-name: CI - Automated Testing
+name: Docker Compose CI
 
 on:
   push:
@@ -7,78 +7,54 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
 
-    env:
-      LANG: zh_CN.UTF-8
-      LANGUAGE: zh_CN:zh
-      LC_ALL: zh_CN.UTF-8
-
     steps:
+      # 1. 检出代码
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 1. 安装中文 locale
-      - name: Setup locale (zh_CN.UTF-8)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y locales
-          sudo sed -i 's/^# *\(zh_CN.UTF-8\)/\1/' /etc/locale.gen
-          sudo locale-gen zh_CN.UTF-8
+      # 2. 设置 Docker Buildx（可选，用于高级构建功能）
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      # 2. 安装 Mono 完整环境
-      - name: Install Mono
+      # 3. 使用 Docker Compose V2（无需额外安装，runner 已内置）
+      - name: Build and start services with Docker Compose
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mono-complete mono-xsp4 ca-certificates-mono
-          mono --version
+          docker compose up -d --build
+        env:
+          # 可在此覆盖 docker-compose.yaml 中的环境变量
+          MSSQL_SA_PASSWORD: LearnSite!2025StrongPwd
 
-      # 3. 安装 NuGet 命令行工具（使用 nuget.exe）
-      - name: Install NuGet
+      # 4. 等待 Web 服务完全启动（最长等待 60 秒）
+      - name: Wait for web service to be ready
         run: |
-          # 下载最新版 nuget.exe
-          curl -o /tmp/nuget.exe https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
-          # 将 nuget 包装为可直接调用的命令
-          sudo tee /usr/local/bin/nuget > /dev/null << 'EOF'
-          #!/bin/bash
-          mono /tmp/nuget.exe "$@"
-          EOF
-          sudo chmod +x /usr/local/bin/nuget
-          # 验证安装
-          nuget help
+          echo "Waiting for web service on http://localhost:8888 ..."
+          timeout 60s sh -c 'until curl -s --fail http://localhost:8888; do \
+            echo "Still waiting..."; sleep 3; \
+          done'
+          echo "Web service is ready!"
 
-      # 4. 自动查找解决方案文件并恢复 NuGet 包
-      - name: Restore NuGet packages
+      # 5. 测试 Web 服务是否正常响应（HTTP 200）
+      - name: Test web service
         run: |
-          SLN_FILE=$(find . -name "*.sln" | head -n 1)
-          if [ -n "$SLN_FILE" ]; then
-            echo "Found solution: $SLN_FILE"
-            nuget restore "$SLN_FILE"
-          else
-            echo "No .sln file found, skipping restore."
-          fi
+          curl -f http://localhost:8888 || (echo "Web test failed" && exit 1)
 
-      # 5. 构建项目（使用 msbuild）
-      - name: Build
+      # 6. （可选）测试数据库连接
+      - name: Test database connectivity
         run: |
-          SLN_FILE=$(find . -name "*.sln" | head -n 1)
-          if [ -n "$SLN_FILE" ]; then
-            msbuild /p:Configuration=Release "$SLN_FILE"
-          else
-            echo "No .sln file found, skipping build."
-          fi
+          echo "Checking SQL Server connection..."
+          # 等待数据库初始化（约 20 秒）
+          sleep 20
+          docker compose exec -T db /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "LearnSite!2025StrongPwd" \
+            -C -Q "SELECT @@VERSION" \
+            && echo "Database connection successful" \
+            || echo "Warning: Database not ready, but continuing"
+        continue-on-error: true   # 数据库非必需，不影响整体结果
 
-      # 6. 运行测试（示例为 NUnit，请根据实际框架调整）
-      - name: Run tests
-        run: |
-          # 如需 NUnit，取消下面两行的注释
-          # sudo apt-get install -y nunit-console
-          # nunit-console ./tests/bin/Release/YourTestProject.dll
-          echo "Add your test command here"
-
-      # 7. （可选）构建 Docker 镜像
-      - name: Build Docker image (optional)
-        run: |
-          docker build -t your-app:test .
-          docker run --rm your-app:test xsp4 --version
+      # 7. 始终停止并移除容器（保证环境清洁）
+      - name: Stop and clean up
+        if: always()
+        run: docker compose down -v
