@@ -15,24 +15,25 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update && \
     sed -i 's/^# *\(zh_CN.UTF-8\)/\1/' /etc/locale.gen && \
     locale-gen zh_CN.UTF-8 && \
     rm -rf /var/lib/apt/lists/*
-    
-# 在安装 locales 之后添加
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
+# ========== 4. 安装 curl（用于 Docker 健康检查）==========
+RUN apt-get -o Acquire::Check-Valid-Until=false update && \
+    apt-get install -y curl && \
     rm -rf /var/lib/apt/lists/*
 
-# ========== 4. 安装中文字体（解决界面/PDF/图片中的中文显示）==========
+# ========== 5. 安装中文字体（解决界面/PDF/图片中文方块）==========
 RUN apt-get -o Acquire::Check-Valid-Until=false update && \
     apt-get install -y --no-install-recommends \
         fonts-wqy-microhei \
         fonts-wqy-zenhei && \
     rm -rf /var/lib/apt/lists/*
 
-# ========== 5. 设置中文环境变量 ==========
+# ========== 6. 设置中文环境变量 ==========
 ENV LANG zh_CN.UTF-8
 ENV LANGUAGE zh_CN:zh
 ENV LC_ALL zh_CN.UTF-8
 
-# ========== 6. 应用目录和启动配置 ==========
+# ========== 7. 应用目录和启动配置 ==========
 WORKDIR /app
 COPY . .
 EXPOSE 9000
