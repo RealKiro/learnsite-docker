@@ -1,12 +1,14 @@
 services:
   web:
     build: .
+    container_name: learnsite
+    network_mode: host
     ports:
-      - "8888:9000"
+      - "9000:9000"
     depends_on:
       - db
     volumes:
-      - .:/app
+      - ./app:/app
     environment:
       - MONO_IOMAP=all
     command: xsp4 --port 9000 --nonstop --address 0.0.0.0
@@ -14,10 +16,12 @@ services:
 
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: mssql
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=LearnSite!2025StrongPwd
       - MSSQL_PID=Express
+    network_mode: host
     ports:
       - "1433:1433"
     volumes:
