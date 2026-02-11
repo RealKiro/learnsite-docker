@@ -17,25 +17,34 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ---------- 启动所有服务（后台）----------
+      # 启动所有服务（后台）
       - name: Build and start services
         run: docker compose up -d --build
         env:
           MSSQL_SA_PASSWORD: LearnSite!2025StrongPwd
 
-      # ---------- 立即打印容器状态，用于诊断 ----------
+      # 显示容器状态（快速诊断）
       - name: Show container status
-        run: docker compose ps
+        run: |
+          docker compose ps
+          docker compose logs --tail=20 web
 
-      - name: Show web service logs (first 50 lines)
-        run: docker compose logs --tail=50 web
+      # 获取 Web 容器的 IP 地址（关键步骤）
+      - name: Get web container IP
+        id: web_ip
+        run: |
+          WEB_CONTAINER=$(docker compose ps -q web)
+          WEB_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $WEB_CONTAINER)
+          echo "WEB_IP=$WEB_IP" >> $GITHUB_OUTPUT
+          echo "Web container IP: $WEB_IP"
 
-      # ---------- 等待 Web 服务就绪（最长 180 秒）----------
+      # 等待 Web 服务就绪（直接访问容器 IP:9000）
       - name: Wait for web service to be ready
         run: |
-          echo "⏳ Waiting for web service on http://localhost:8888 ..."
-          timeout 180s sh -c '
-            until curl -s --fail http://localhost:8888; do
+          WEB_IP="${{ steps.web_ip.outputs.WEB_IP }}"
+          echo "⏳ Waiting for web service at http://${WEB_IP}:9000 ..."
+          timeout 120s sh -c '
+            until curl -s --fail "http://${WEB_IP}:9000"; do
               echo "   Still waiting... (container status below)"
               docker compose ps web
               echo "   Last 5 lines of web logs:"
@@ -46,16 +55,16 @@ jobs:
           '
           echo "✅ Web service is ready!"
 
-      # ---------- 核心测试：Web 响应 ----------
-      - name: Test web service (HTTP 200)
+      # 核心测试：访问 Web 服务
+      - name: Test web service
         run: |
-          curl -v --fail http://localhost:8888 || (echo "❌ Web test failed" && exit 1)
+          WEB_IP="${{ steps.web_ip.outputs.WEB_IP }}"
+          curl -v --fail "http://${WEB_IP}:9000" || (echo "❌ Web test failed" && exit 1)
 
-      # ---------- 可选：数据库连接测试 ----------
+      # （可选）测试数据库连接
       - name: Test database connectivity
         run: |
           echo "🔍 Checking SQL Server connection..."
-          # 等待数据库完全启动
           sleep 20
           docker compose exec -T db /opt/mssql-tools18/bin/sqlcmd \
             -S localhost -U sa -P "LearnSite!2025StrongPwd" \
@@ -64,7 +73,7 @@ jobs:
             || echo "⚠️ Warning: Database not ready, continuing"
         continue-on-error: true
 
-      # ---------- 无论成功与否，清理资源 ----------
+      # 清理资源
       - name: Stop and clean up
         if: always()
         run: docker compose down -v
