@@ -29,9 +29,9 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update && \
     rm -rf /var/lib/apt/lists/*
 
 # ========== 6. 设置中文环境变量 ==========
-ENV LANG zh_CN.UTF-8
-ENV LANGUAGE zh_CN:zh
-ENV LC_ALL zh_CN.UTF-8
+ENV LANG=zh_CN.UTF-8
+ENV LANGUAGE=zh_CN:zh
+ENV LC_ALL=zh_CN.UTF-8
 
 # ========== 7. 应用目录和启动配置 ==========
 WORKDIR /app
