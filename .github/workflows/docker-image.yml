@@ -10,7 +10,6 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    # 支持中文 locale
     env:
       LANG: zh_CN.UTF-8
       LANGUAGE: zh_CN:zh
@@ -28,15 +27,28 @@ jobs:
           sudo sed -i 's/^# *\(zh_CN.UTF-8\)/\1/' /etc/locale.gen
           sudo locale-gen zh_CN.UTF-8
 
-      # 2. 安装 Mono + NuGet 命令行工具（nuget 包已包含）
-      - name: Install Mono and NuGet
+      # 2. 安装 Mono 完整环境
+      - name: Install Mono
         run: |
           sudo apt-get update
-          sudo apt-get install -y mono-complete mono-xsp4 ca-certificates-mono nuget
+          sudo apt-get install -y mono-complete mono-xsp4 ca-certificates-mono
           mono --version
-          nuget help  # 验证安装
 
-      # 3. 自动查找解决方案文件并恢复 NuGet 包
+      # 3. 安装 NuGet 命令行工具（使用 nuget.exe）
+      - name: Install NuGet
+        run: |
+          # 下载最新版 nuget.exe
+          curl -o /tmp/nuget.exe https://dist.nuget.org/win-x86-commandline/latest/nuget.exe
+          # 将 nuget 包装为可直接调用的命令
+          sudo tee /usr/local/bin/nuget > /dev/null << 'EOF'
+          #!/bin/bash
+          mono /tmp/nuget.exe "$@"
+          EOF
+          sudo chmod +x /usr/local/bin/nuget
+          # 验证安装
+          nuget help
+
+      # 4. 自动查找解决方案文件并恢复 NuGet 包
       - name: Restore NuGet packages
         run: |
           SLN_FILE=$(find . -name "*.sln" | head -n 1)
@@ -47,7 +59,7 @@ jobs:
             echo "No .sln file found, skipping restore."
           fi
 
-      # 4. 构建项目（使用 msbuild，Mono 已自带）
+      # 5. 构建项目（使用 msbuild）
       - name: Build
         run: |
           SLN_FILE=$(find . -name "*.sln" | head -n 1)
@@ -57,16 +69,15 @@ jobs:
             echo "No .sln file found, skipping build."
           fi
 
-      # 5. 运行测试（请根据实际测试框架调整）
+      # 6. 运行测试（示例为 NUnit，请根据实际框架调整）
       - name: Run tests
         run: |
-          # 示例：使用 nunit-console（需要安装 nunit-console 包）
+          # 如需 NUnit，取消下面两行的注释
           # sudo apt-get install -y nunit-console
           # nunit-console ./tests/bin/Release/YourTestProject.dll
           echo "Add your test command here"
-        continue-on-error: false
 
-      # 6. （可选）构建 Docker 镜像并验证
+      # 7. （可选）构建 Docker 镜像
       - name: Build Docker image (optional)
         run: |
           docker build -t your-app:test .
