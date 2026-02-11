@@ -10,18 +10,17 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    # 支持中文 locale（解决中文乱码问题）
+    # 支持中文 locale
     env:
       LANG: zh_CN.UTF-8
       LANGUAGE: zh_CN:zh
       LC_ALL: zh_CN.UTF-8
 
     steps:
-      # 1. 检出代码
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. 设置并生成中文 locale
+      # 1. 安装中文 locale
       - name: Setup locale (zh_CN.UTF-8)
         run: |
           sudo apt-get update
@@ -29,41 +28,46 @@ jobs:
           sudo sed -i 's/^# *\(zh_CN.UTF-8\)/\1/' /etc/locale.gen
           sudo locale-gen zh_CN.UTF-8
 
-      # 3. 安装 Mono（如果项目需要特定版本，可指定）
-      - name: Install Mono
+      # 2. 安装 Mono + NuGet 命令行工具（nuget 包已包含）
+      - name: Install Mono and NuGet
         run: |
           sudo apt-get update
-          sudo apt-get install -y mono-complete mono-xsp4 ca-certificates-mono
+          sudo apt-get install -y mono-complete mono-xsp4 ca-certificates-mono nuget
           mono --version
+          nuget help  # 验证安装
 
-      # 4. 恢复 NuGet 包（如果有 .sln 或 .csproj）
+      # 3. 自动查找解决方案文件并恢复 NuGet 包
       - name: Restore NuGet packages
         run: |
-          nuget restore YourSolution.sln   # 替换为实际的解决方案文件
-        continue-on-error: true            # 如果没有 NuGet 项目则跳过
+          SLN_FILE=$(find . -name "*.sln" | head -n 1)
+          if [ -n "$SLN_FILE" ]; then
+            echo "Found solution: $SLN_FILE"
+            nuget restore "$SLN_FILE"
+          else
+            echo "No .sln file found, skipping restore."
+          fi
 
-      # 5. 构建项目（使用 msbuild 或 xbuild）
+      # 4. 构建项目（使用 msbuild，Mono 已自带）
       - name: Build
         run: |
-          msbuild /p:Configuration=Release YourSolution.sln   # 或使用 xbuild
+          SLN_FILE=$(find . -name "*.sln" | head -n 1)
+          if [ -n "$SLN_FILE" ]; then
+            msbuild /p:Configuration=Release "$SLN_FILE"
+          else
+            echo "No .sln file found, skipping build."
+          fi
 
-      # 6. 运行单元测试（例如使用 NUnit, xUnit, MSTest）
+      # 5. 运行测试（请根据实际测试框架调整）
       - name: Run tests
         run: |
-          # 假设测试项目输出到 ./tests/bin/Release，使用 nunit-console
-          nunit-console ./tests/bin/Release/YourTestProject.dll
+          # 示例：使用 nunit-console（需要安装 nunit-console 包）
+          # sudo apt-get install -y nunit-console
+          # nunit-console ./tests/bin/Release/YourTestProject.dll
+          echo "Add your test command here"
         continue-on-error: false
 
-      # 可选：如果使用 Docker 构建并测试，可以在此步进行
+      # 6. （可选）构建 Docker 镜像并验证
       - name: Build Docker image (optional)
         run: |
           docker build -t your-app:test .
-          docker run --rm your-app:test xsp4 --version   # 简单验证
-
-      # 可选：上传测试结果
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: TestResult.xml   # 根据测试框架实际输出路径调整
+          docker run --rm your-app:test xsp4 --version
