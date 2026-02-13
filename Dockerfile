@@ -42,21 +42,16 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update && \
     apt-get install -y git && \
     rm -rf /var/lib/apt/lists/*
 
-# ========== 8. 安装 envsubst（来自 gettext-base，用于模板变量替换）==========
-RUN apt-get -o Acquire::Check-Valid-Until=false update && \
-    apt-get install -y gettext-base && \
-    rm -rf /var/lib/apt/lists/*
-
-# ========== 9. 设置中文环境变量 ==========
+# ========== 8. 设置中文环境变量 ==========
 ENV LANG=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 ENV LC_ALL=zh_CN.UTF-8
 
-# ========== 10. 复制 entrypoint 预处理脚本 ==========
+# ========== 9. 复制 entrypoint 预处理脚本 ==========
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# ========== 11. 应用目录和启动配置 ==========
+# ========== 10. 应用目录和启动配置 ==========
 WORKDIR /app
 EXPOSE 8080
 
