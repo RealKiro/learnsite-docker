@@ -99,29 +99,33 @@ if [ ! -f "${MARKER_FILE}" ]; then
         fi
     fi
 
-    # 创建标记文件（表示首次初始化完成）
-    touch "${MARKER_FILE}"
-    echo "✓ Initialization complete. Marker file created."
-else
-    echo "⏭️ Not first run (marker file exists). Skipping source update."
-fi
-
-# ========== 确保 web.config 存在（如果缺失则从默认备份恢复）==========
-if [ ! -f "${TARGET_WEB_CONFIG}" ]; then
-    echo "⚠️ Target web.config not found. Restoring from default template..."
+    # ====== 关键修改：在首次运行时强制从默认备份复制 web.config ======
     if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
+        echo "Copying default web.config template to ${TARGET_WEB_CONFIG}"
         cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
-        echo "✓ Restored web.config from default template."
+        echo "✓ Default web.config template copied."
     else
         echo "❌ ERROR: Default web.config not found in image. Cannot proceed."
         exit 1
     fi
+
+    # 创建标记文件
+    touch "${MARKER_FILE}"
+    echo "✓ Initialization complete. Marker file created."
+else
+    echo "⏭️ Not first run (marker file exists). Skipping source update and template copy."
+fi
+
+# ========== 确保 web.config 存在（保险，如果首次运行时复制失败）==========
+if [ ! -f "${TARGET_WEB_CONFIG}" ] && [ -f "${DEFAULT_WEB_CONFIG}" ]; then
+    echo "⚠️ Target web.config missing. Restoring from default template..."
+    cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
+    echo "✓ Restored web.config from default template."
 fi
 
 # ========== 使用 envsubst 替换环境变量占位符 ==========
 if command -v envsubst >/dev/null 2>&1; then
     echo "Applying environment variables to web.config..."
-    # 使用临时文件避免同时读写
     envsubst < "${TARGET_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}.tmp" && mv "${TARGET_WEB_CONFIG}.tmp" "${TARGET_WEB_CONFIG}"
     echo "✓ Environment variables applied."
 else
