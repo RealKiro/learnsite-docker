@@ -2,7 +2,7 @@
 set -e
 
 # ========== 配置区域 ==========
-REPO_URL="https://github.com/RealKiro/learnsite"          # 主源码仓库
+REPO_URL="https://github.com/RealKiro/learnsite.git"          # 新主仓库地址
 APP_DIR="/app"
 STATE_DIR="${APP_DIR}/.state"                                    # 持久化状态目录
 LAST_MAIN_COMMIT_FILE="${STATE_DIR}/last_main_commit"            # 上次主源码 commit
@@ -16,7 +16,7 @@ DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"         # 镜像内的�
 # ==============================
 
 echo "========================================="
-echo "Starting LearnSite dynamic setup (with auto recovery)"
+echo "Starting LearnSite dynamic setup (with envsubst)"
 echo "========================================="
 
 # 确保状态目录存在
@@ -60,10 +60,17 @@ if [ ! -f "${MARKER_FILE}" ]; then
         # 清空 /app 但保留状态目录和标记文件（当前标记文件还不存在，所以无需特别保留）
         find "${APP_DIR}" -mindepth 1 -not -path "${STATE_DIR}" -not -path "${STATE_DIR}/*" -delete 2>/dev/null || true
 
-        # 复制新源码
+        # 复制新源码（根据仓库结构灵活处理）
+        # 尝试常见的源码子目录：LearnSiteDev、src、Source，如果没有则复制根目录
         if [ -d "${SRC_TMP}/LearnSiteDev" ]; then
             cp -r "${SRC_TMP}/LearnSiteDev/"* "${APP_DIR}/" 2>/dev/null || true
             cp -r "${SRC_TMP}/LearnSiteDev/".[!.]* "${APP_DIR}/" 2>/dev/null || true
+        elif [ -d "${SRC_TMP}/src" ]; then
+            cp -r "${SRC_TMP}/src/"* "${APP_DIR}/" 2>/dev/null || true
+            cp -r "${SRC_TMP}/src/".[!.]* "${APP_DIR}/" 2>/dev/null || true
+        elif [ -d "${SRC_TMP}/Source" ]; then
+            cp -r "${SRC_TMP}/Source/"* "${APP_DIR}/" 2>/dev/null || true
+            cp -r "${SRC_TMP}/Source/".[!.]* "${APP_DIR}/" 2>/dev/null || true
         else
             cp -r "${SRC_TMP}/"* "${APP_DIR}/" 2>/dev/null || true
             cp -r "${SRC_TMP}/".[!.]* "${APP_DIR}/" 2>/dev/null || true
@@ -82,6 +89,12 @@ if [ ! -f "${MARKER_FILE}" ]; then
             if [ -d "${SRC_TMP}/LearnSiteDev" ]; then
                 cp -r "${SRC_TMP}/LearnSiteDev/"* "${APP_DIR}/" 2>/dev/null || true
                 cp -r "${SRC_TMP}/LearnSiteDev/".[!.]* "${APP_DIR}/" 2>/dev/null || true
+            elif [ -d "${SRC_TMP}/src" ]; then
+                cp -r "${SRC_TMP}/src/"* "${APP_DIR}/" 2>/dev/null || true
+                cp -r "${SRC_TMP}/src/".[!.]* "${APP_DIR}/" 2>/dev/null || true
+            elif [ -d "${SRC_TMP}/Source" ]; then
+                cp -r "${SRC_TMP}/Source/"* "${APP_DIR}/" 2>/dev/null || true
+                cp -r "${SRC_TMP}/Source/".[!.]* "${APP_DIR}/" 2>/dev/null || true
             else
                 cp -r "${SRC_TMP}/"* "${APP_DIR}/" 2>/dev/null || true
                 cp -r "${SRC_TMP}/".[!.]* "${APP_DIR}/" 2>/dev/null || true
@@ -135,9 +148,18 @@ if [ ! -f "${TARGET_WEB_CONFIG}" ]; then
     fi
 fi
 
-# 最终提示
+# ========== 使用 envsubst 替换环境变量占位符 ==========
+if command -v envsubst >/dev/null 2>&1; then
+    echo "Applying environment variables to web.config..."
+    # 使用临时文件避免同时读写
+    envsubst < "${TARGET_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}.tmp" && mv "${TARGET_WEB_CONFIG}.tmp" "${TARGET_WEB_CONFIG}"
+    echo "✓ Environment variables applied."
+else
+    echo "⚠️ envsubst not found. Placeholders will remain in web.config."
+fi
+
 echo "========================================="
-echo "Starting web server with template web.config..."
+echo "Starting web server with configured web.config..."
 echo "========================================="
 
 exec "$@"
