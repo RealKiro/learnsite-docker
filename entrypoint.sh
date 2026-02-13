@@ -74,8 +74,6 @@ else
     echo "⏭️ Not first run (marker file exists). Skipping source update."
 fi
 
-# 注意：不再执行 envsubst，web.config 始终保持模板状态
-
 echo "========================================="
 echo "Starting web server with template web.config..."
 echo "========================================="
