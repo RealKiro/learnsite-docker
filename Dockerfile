@@ -47,8 +47,9 @@ ENV LANG=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 ENV LC_ALL=zh_CN.UTF-8
 
-# ========== 9. 复制 entrypoint 预处理脚本 ==========
+# ========== 9. 复制 entrypoint 脚本和本地 web.config ==========
 COPY entrypoint.sh /usr/local/bin/
+COPY web.config /usr/local/bin/   # 确保与 entrypoint.sh 同目录
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # ========== 10. 应用目录和启动配置 ==========
