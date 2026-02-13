@@ -37,9 +37,9 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update && \
 
 ENV TZ=Asia/Shanghai
 
-# ========== 7. 安装 envsubst（用于 web.config 变量替换）==========
+# ========== 7. 安装 git（用于启动时拉取源码）==========
 RUN apt-get -o Acquire::Check-Valid-Until=false update && \
-    apt-get install -y gettext-base && \
+    apt-get install -y git && \
     rm -rf /var/lib/apt/lists/*
 
 # ========== 8. 设置中文环境变量 ==========
@@ -53,8 +53,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh
 
 # ========== 10. 应用目录和启动配置 ==========
 WORKDIR /app
-COPY . .
+# 注意：不预先复制源码，因为 entrypoint 会动态拉取
+EXPOSE 8080
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-EXPOSE 8080
 CMD ["xsp4", "--port", "8080", "--nonstop", "--address", "0.0.0.0"]
