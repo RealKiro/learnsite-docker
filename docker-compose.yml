@@ -11,6 +11,11 @@ services:
       - ./app:/app
     environment:
       - MONO_IOMAP=all
+      - DB_HOST=172.17.0.1  # 数据库服务器的IP地址
+      - DB_NAME=learnsite  # 创建的数据库名称
+      - DB_USER=sa  # SQL Server数据库默认管理员账户
+      - DB_PASSWORD=LearnSite!2025StrongPwd  # 创建的数据库密码（需和下面的环境变量MSSQL_SA_PASSWORD保持一致）
+      - MONO_IOMAP=all
     command: xsp4 --port 9000 --nonstop --address 0.0.0.0
     restart: always
 
