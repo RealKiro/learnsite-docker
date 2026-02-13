@@ -4,7 +4,7 @@ services:
     container_name: learnsite
     network_mode: host  #如果端口9000被占用请注释掉这一行,并将宿主机端口改为其它端口
     ports:
-      - "9000:9000"
+      - "8080:8080"
     depends_on:
       - db
     volumes:
