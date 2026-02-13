@@ -2,7 +2,7 @@
 set -e
 
 # ========== 配置区域 ==========
-REPO_URL="https://gitee.com/jnschool/learnsite-wz.git"          # 主源码仓库
+REPO_URL="https://github.com/RealKiro/learnsite"          # 主源码仓库
 APP_DIR="/app"
 STATE_DIR="${APP_DIR}/.state"                                    # 持久化状态目录
 LAST_MAIN_COMMIT_FILE="${STATE_DIR}/last_main_commit"            # 上次主源码 commit
