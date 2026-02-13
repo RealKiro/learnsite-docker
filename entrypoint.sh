@@ -106,17 +106,17 @@ if [ ! -f "${MARKER_FILE}" ]; then
     fi
 
     # 如果 web.config 存在，将其转换为模板（占位符）
-    if [ -f "${TARGET_WEB_CONFIG}" ]; then
-        echo "Converting web.config to template with placeholders..."
-        sed -i "s/Data Source=[^;]*;/Data Source=\${DB_HOST};/" "${TARGET_WEB_CONFIG}"
-        sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=\${DB_NAME};/" "${TARGET_WEB_CONFIG}"
-        sed -i "s/uid=[^;]*;/uid=\${DB_USER};/" "${TARGET_WEB_CONFIG}"
-        sed -i "s/pwd=[^;]*;/pwd=\${DB_PASSWORD};/" "${TARGET_WEB_CONFIG}"
-        echo "✓ Template created."
-    else
-        echo "❌ Error: web.config not found after all attempts."
-        exit 1
-    fi
+    # if [ -f "${TARGET_WEB_CONFIG}" ]; then
+    #     echo "Converting web.config to template with placeholders..."
+    #     sed -i "s/Data Source=[^;]*;/Data Source=\${DB_HOST};/" "${TARGET_WEB_CONFIG}"
+    #     sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=\${DB_NAME};/" "${TARGET_WEB_CONFIG}"
+    #     sed -i "s/uid=[^;]*;/uid=\${DB_USER};/" "${TARGET_WEB_CONFIG}"
+    #     sed -i "s/pwd=[^;]*;/pwd=\${DB_PASSWORD};/" "${TARGET_WEB_CONFIG}"
+    #     echo "✓ Template created."
+    # else
+    #     echo "❌ Error: web.config not found after all attempts."
+    #     exit 1
+    # fi
 
     # 创建标记文件
     touch "${MARKER_FILE}"
