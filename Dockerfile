@@ -56,4 +56,5 @@ WORKDIR /app
 COPY . .
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-CMD ["xsp4", "--port", "9000", "--nonstop", "--address", "0.0.0.0"]
+EXPOSE 8080
+CMD ["xsp4", "--port", "8080", "--nonstop", "--address", "0.0.0.0"]
