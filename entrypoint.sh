@@ -12,10 +12,11 @@ MARKER_FILE="${APP_DIR}/.initialized"                            # 初始化标�
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOCAL_WEB_CONFIG="${SCRIPT_DIR}/web.config"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
+DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"         # 镜像内的默认备份
 # ==============================
 
 echo "========================================="
-echo "Starting LearnSite dynamic setup (with local web.config)"
+echo "Starting LearnSite dynamic setup (with auto recovery)"
 echo "========================================="
 
 # 确保状态目录存在
@@ -75,7 +76,6 @@ if [ ! -f "${MARKER_FILE}" ]; then
         # 如果主源码未更新，但 /app 可能为空（例如卷丢失），则强制更新
         if [ ! -d "${APP_DIR}" ] || [ -z "$(ls -A "${APP_DIR}")" ]; then
             echo "⚠️ /app is empty but commit record exists. Forcing main source update."
-            # 简单重新克隆（可复用上面逻辑，为简洁直接调用自身？但避免递归，重复代码）
             SRC_TMP="/tmp/learnsite-src"
             git clone --depth 1 "${REPO_URL}" "${SRC_TMP}"
             find "${APP_DIR}" -mindepth 1 -not -path "${STATE_DIR}" -not -path "${STATE_DIR}/*" -delete 2>/dev/null || true
@@ -105,7 +105,8 @@ if [ ! -f "${MARKER_FILE}" ]; then
         done
     fi
 
-    # 如果 web.config 存在，将其转换为模板（占位符）
+    # 注意：您已经手动将 web.config 改为了包含占位符的通用模板，因此不再执行模板转换。
+    # 如果后续需要自动转换，可取消下面注释。
     # if [ -f "${TARGET_WEB_CONFIG}" ]; then
     #     echo "Converting web.config to template with placeholders..."
     #     sed -i "s/Data Source=[^;]*;/Data Source=\${DB_HOST};/" "${TARGET_WEB_CONFIG}"
@@ -113,9 +114,6 @@ if [ ! -f "${MARKER_FILE}" ]; then
     #     sed -i "s/uid=[^;]*;/uid=\${DB_USER};/" "${TARGET_WEB_CONFIG}"
     #     sed -i "s/pwd=[^;]*;/pwd=\${DB_PASSWORD};/" "${TARGET_WEB_CONFIG}"
     #     echo "✓ Template created."
-    # else
-    #     echo "❌ Error: web.config not found after all attempts."
-    #     exit 1
     # fi
 
     # 创建标记文件
@@ -125,7 +123,21 @@ else
     echo "⏭️ Not first run (marker file exists). Skipping source update and template generation."
 fi
 
+# ========== 自动恢复 web.config（如果缺失）==========
+if [ ! -f "${TARGET_WEB_CONFIG}" ]; then
+    echo "⚠️ Target web.config not found. Attempting to restore from default template..."
+    if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
+        cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
+        echo "✓ Restored web.config from default template (${DEFAULT_WEB_CONFIG})."
+    else
+        echo "❌ ERROR: Default web.config not found in image. Cannot proceed."
+        exit 1
+    fi
+fi
+
+# 最终提示
 echo "========================================="
 echo "Starting web server with template web.config..."
 echo "========================================="
+
 exec "$@"
