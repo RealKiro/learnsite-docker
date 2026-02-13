@@ -2,7 +2,7 @@ services:
   web:
     build: .
     container_name: learnsite
-    network_mode: host
+    network_mode: host  #如果端口9000被占用请注释掉这一行,并将宿主机端口改为其它端口
     ports:
       - "9000:9000"
     depends_on:
@@ -10,7 +10,6 @@ services:
     volumes:
       - ./app:/app
     environment:
-      - MONO_IOMAP=all
       - DB_HOST=172.17.0.1  # 数据库服务器的IP地址
       - DB_NAME=learnsite  # 创建的数据库名称
       - DB_USER=sa  # SQL Server数据库默认管理员账户
