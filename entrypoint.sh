@@ -2,12 +2,13 @@
 set -e
 
 # ========== 配置区域 ==========
-REPO_URL="https://gitee.com/jnschool/learnsite-wz.git"          # 主源码仓库
-CUSTOM_WEB_CONFIG_URL="https://gitee.com/jnschool/game/raw/master/LearnSite_ChengDu/web.config"  # 自定义 web.config
+REPO_URL="https://gitee.com/jnschool/learnsite-wz.git"
+CUSTOM_WEB_CONFIG_URL="https://gitee.com/jnschool/game/raw/master/LearnSite_ChengDu/web.config"
 SRC_TMP="/tmp/learnsite-src"
 APP_DIR="/app"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
-MARKER_FILE="${APP_DIR}/.initialized"                           # 标记文件，存在表示已初始化
+TEMPLATE_WEB_CONFIG="${APP_DIR}/web.config.template"
+MARKER_FILE="${APP_DIR}/.initialized"
 # ==============================
 
 echo "========================================="
@@ -18,11 +19,11 @@ echo "========================================="
 if [ ! -f "${MARKER_FILE}" ]; then
     echo "🚀 First run detected. Performing initial setup..."
 
-    # 步骤1：克隆最新源码（仅最新提交，深度1）
+    # 步骤1：克隆最新源码
     echo "Cloning latest source from ${REPO_URL}..."
     git clone --depth 1 ${REPO_URL} ${SRC_TMP}
 
-    # 步骤2：清空 /app 目录（但保留目录本身）
+    # 步骤2：清空 /app 目录
     rm -rf ${APP_DIR}/*
     echo "✓ Cleaned ${APP_DIR}"
 
@@ -54,37 +55,51 @@ if [ ! -f "${MARKER_FILE}" ]; then
 
     if [ -s /tmp/web.config.custom ]; then
         mv /tmp/web.config.custom ${TARGET_WEB_CONFIG}
-        echo "✓ Replaced web.config with ChengDu version."
+        echo "✓ Downloaded custom web.config."
     else
         echo "⚠️ Failed to download custom web.config. Keeping original from source."
     fi
 
-    # 创建标记文件，表示初始化完成
+    # 步骤6：创建模板文件并替换具体值为占位符
+    cp ${TARGET_WEB_CONFIG} ${TEMPLATE_WEB_CONFIG}
+    echo "✓ Created template file: ${TEMPLATE_WEB_CONFIG}"
+
+    # 将模板中的具体数据库连接参数替换为占位符
+    # 注意：如果原始 web.config 格式不同，请调整下面的正则表达式
+    sed -i "s/Data Source=[^;]*;/Data Source=\${DB_HOST};/" ${TEMPLATE_WEB_CONFIG}
+    sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=\${DB_NAME};/" ${TEMPLATE_WEB_CONFIG}
+    sed -i "s/uid=[^;]*;/uid=\${DB_USER};/" ${TEMPLATE_WEB_CONFIG}
+    sed -i "s/pwd=[^;]*;/pwd=\${DB_PASSWORD};/" ${TEMPLATE_WEB_CONFIG}
+    echo "✓ Replaced connection string values with placeholders in template."
+
+    # 创建标记文件
     touch "${MARKER_FILE}"
     echo "✓ Initialization complete. Marker file created."
 else
-    echo "⏭️ Not first run (marker file exists). Skipping source update and web.config download."
+    echo "⏭️ Not first run (marker file exists). Skipping source update and template creation."
 fi
 
-# ========== 以下步骤每次启动都会执行 ==========
-# 修改数据库连接字符串（使用环境变量）
-if [ -f "${TARGET_WEB_CONFIG}" ]; then
-    echo "Applying database connection settings from environment variables..."
-    sed -i "s/Data Source=[^;]*;/Data Source=${DB_HOST};/" ${TARGET_WEB_CONFIG}
-    sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=${DB_NAME};/" ${TARGET_WEB_CONFIG}
-    sed -i "s/uid=[^;]*;/uid=${DB_USER};/" ${TARGET_WEB_CONFIG}
-    sed -i "s/pwd=[^;]*;/pwd=${DB_PASSWORD};/" ${TARGET_WEB_CONFIG}
-    echo "✓ Database connection string updated."
+# ========== 每次启动都会执行的步骤 ==========
+# 从模板生成最终的 web.config（使用环境变量替换占位符）
+if [ -f "${TEMPLATE_WEB_CONFIG}" ]; then
+    echo "Generating final web.config from template using envsubst..."
+    if command -v envsubst >/dev/null 2>&1; then
+        envsubst < "${TEMPLATE_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}"
+        echo "✓ Final web.config generated."
+    else
+        echo "⚠️ envsubst not found. Falling back to direct sed replacement on web.config."
+        # 后备方案：直接修改 web.config（可能不精确，但避免失败）
+        sed -i "s/Data Source=[^;]*;/Data Source=${DB_HOST};/" ${TARGET_WEB_CONFIG}
+        sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=${DB_NAME};/" ${TARGET_WEB_CONFIG}
+        sed -i "s/uid=[^;]*;/uid=${DB_USER};/" ${TARGET_WEB_CONFIG}
+        sed -i "s/pwd=[^;]*;/pwd=${DB_PASSWORD};/" ${TARGET_WEB_CONFIG}
+    fi
 else
-    echo "❌ Error: web.config not found at ${TARGET_WEB_CONFIG}"
+    echo "❌ Error: Template file ${TEMPLATE_WEB_CONFIG} not found!"
     exit 1
 fi
 
-# 可选：如果需要使用 envsubst 进行通用变量替换，可以保留
-if command -v envsubst >/dev/null 2>&1; then
-    echo "Applying environment variables to web.config (envsubst)..."
-    envsubst < "${TARGET_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}.tmp" && mv "${TARGET_WEB_CONFIG}.tmp" "${TARGET_WEB_CONFIG}"
-fi
+# 可选：如果需要用 envsubst 处理其他文件，可以在这里添加
 
 echo "========================================="
 echo "Starting web server..."
