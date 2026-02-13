@@ -4,9 +4,9 @@ FROM mono:latest
 RUN echo "deb http://archive.debian.org/debian buster main" > /etc/apt/sources.list && \
     echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list
 
-# ========== 2. 安装 Mono 基础组件 ==========
+# ========== 2. 安装 Mono 基础组件（xsp4）==========
 RUN apt-get -o Acquire::Check-Valid-Until=false update && \
-    apt-get install -y mono-complete ca-certificates-mono && \
+    apt-get install -y mono-xsp4 ca-certificates-mono && \
     rm -rf /var/lib/apt/lists/*
 
 # ========== 3. 安装 locales 并生成中文语言环境 ==========
