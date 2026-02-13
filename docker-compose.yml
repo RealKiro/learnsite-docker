@@ -8,7 +8,9 @@ services:
     depends_on:
       - db
     volumes:
-      - ./app:/app
+        - learnsite_data:/app   # 持久化源码和状态
+      # 可选：如果希望挂载自定义 web.config，可以取消下面注释
+      # - ./my-custom-web.config:/app/web.config
     environment:
       - DB_HOST=172.17.0.1  # 数据库服务器的IP地址
       - DB_NAME=learnsite  # 创建的数据库名称
