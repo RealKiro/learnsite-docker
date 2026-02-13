@@ -71,18 +71,41 @@ jobs:
           echo "Formatted time: $FORMATTED_TIME"
           echo "formatted_time=$FORMATTED_TIME" >> $GITHUB_OUTPUT
 
-      # 5. 如果有新提交，克隆完整源码准备构建
-      - name: Clone full source for build
+      # 5. 如果有新提交，克隆完整源码并正确准备构建目录
+      - name: Clone full source and prepare build context
         if: steps.check_commit.outputs.new_commit == 'true'
         run: |
+          # 创建目标构建目录
+          mkdir -p app-source
+          
+          # 克隆完整仓库
           git clone https://gitee.com/jnschool/learnsite-wz.git learnsite-source
-          # 根据实际仓库结构定位源码目录（此处假设源码在根目录或LearnSiteDev）
-          if [ -d "learnsite-source/LearnSiteDev" ]; then
-            mv learnsite-source/LearnSiteDev/* ./app-source/
+          cd learnsite-source
+          
+          # 检查并定位实际源码位置（关键修复）
+          if [ -d "LearnSiteDev" ]; then
+            echo "Found LearnSiteDev directory. Using it as source root."
+            # 将 LearnSiteDev 的内容移动到 app-source
+            mv LearnSiteDev/* ../app-source/
+            # 同时移动可能存在的隐藏文件（如 .htaccess 等）
+            mv LearnSiteDev/.[!.]* ../app-source/ 2>/dev/null || true
+          elif [ -d "LearnSite_ChengDu" ]; then
+            echo "Found LearnSite_ChengDu directory. Using it as source root."
+            mv LearnSite_ChengDu/* ../app-source/
+            mv LearnSite_ChengDu/.[!.]* ../app-source/ 2>/dev/null || true
           else
-            mv learnsite-source/* ./app-source/ 2>/dev/null || true
+            echo "No specific subdirectory found. Assuming root is the source."
+            # 如果根目录就是源码，移动所有文件（排除 .git 目录）
+            rsync -av --exclude='.git' ./ ../app-source/
           fi
+          
+          # 返回上级目录并清理
+          cd ..
           rm -rf learnsite-source
+          
+          # 验证 app-source 目录内容（可选，用于调试）
+          echo "Contents of app-source:"
+          ls -la app-source/
 
       # 6. 替换为自定义的web.config和其他必要文件
       - name: Replace with custom configs
