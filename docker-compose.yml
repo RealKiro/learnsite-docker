@@ -15,7 +15,6 @@ services:
       - DB_USER=sa  # SQL Server数据库默认管理员账户
       - DB_PASSWORD=LearnSite!2025StrongPwd  # 创建的数据库密码（需和下面的环境变量MSSQL_SA_PASSWORD保持一致）
       - MONO_IOMAP=all
-    command: xsp4 --port 9000 --nonstop --address 0.0.0.0
     restart: always
 
   db:
