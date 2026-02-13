@@ -2,17 +2,13 @@
 set -e
 
 # ========== 配置区域 ==========
-REPO_URL="https://github.com/RealKiro/learnsite.git"          # 新主仓库地址
+REPO_URL="https://github.com/RealKiro/learnsite.git"          # 主仓库地址
 APP_DIR="/app"
-STATE_DIR="${APP_DIR}/.state"                                    # 持久化状态目录
-LAST_MAIN_COMMIT_FILE="${STATE_DIR}/last_main_commit"            # 上次主源码 commit
-MARKER_FILE="${APP_DIR}/.initialized"                            # 初始化标记
-
-# 本地 web.config 路径（与 entrypoint.sh 同目录）
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LOCAL_WEB_CONFIG="${SCRIPT_DIR}/web.config"
+STATE_DIR="${APP_DIR}/.state"                                  # 持久化状态目录
+LAST_MAIN_COMMIT_FILE="${STATE_DIR}/last_main_commit"          # 上次主源码 commit
+MARKER_FILE="${APP_DIR}/.initialized"                          # 初始化标记
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
-DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"         # 镜像内的默认备份
+DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"       # 镜像内的默认备份
 # ==============================
 
 echo "========================================="
@@ -61,7 +57,6 @@ if [ ! -f "${MARKER_FILE}" ]; then
         find "${APP_DIR}" -mindepth 1 -not -path "${STATE_DIR}" -not -path "${STATE_DIR}/*" -delete 2>/dev/null || true
 
         # 复制新源码（根据仓库结构灵活处理）
-        # 尝试常见的源码子目录：LearnSiteDev、src、Source，如果没有则复制根目录
         if [ -d "${SRC_TMP}/LearnSiteDev" ]; then
             cp -r "${SRC_TMP}/LearnSiteDev/"* "${APP_DIR}/" 2>/dev/null || true
             cp -r "${SRC_TMP}/LearnSiteDev/".[!.]* "${APP_DIR}/" 2>/dev/null || true
@@ -104,44 +99,19 @@ if [ ! -f "${MARKER_FILE}" ]; then
         fi
     fi
 
-    # 从本地复制 web.config
-    if [ -f "${LOCAL_WEB_CONFIG}" ]; then
-        echo "Copying local web.config to ${TARGET_WEB_CONFIG}"
-        cp "${LOCAL_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
-        echo "✓ Local web.config copied."
-    else
-        echo "⚠️ Local web.config not found at ${LOCAL_WEB_CONFIG}. Searching for default in source..."
-        # 从源码中查找默认 web.config 并复制
-        find "${APP_DIR}" -name "web.config" -type f -print -quit | while read -r default_config; do
-            cp "${default_config}" "${TARGET_WEB_CONFIG}"
-            echo "✓ Copied default web.config from source."
-        done
-    fi
-
-    # 注意：您已经手动将 web.config 改为了包含占位符的通用模板，因此不再执行模板转换。
-    # 如果后续需要自动转换，可取消下面注释。
-    # if [ -f "${TARGET_WEB_CONFIG}" ]; then
-    #     echo "Converting web.config to template with placeholders..."
-    #     sed -i "s/Data Source=[^;]*;/Data Source=\${DB_HOST};/" "${TARGET_WEB_CONFIG}"
-    #     sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=\${DB_NAME};/" "${TARGET_WEB_CONFIG}"
-    #     sed -i "s/uid=[^;]*;/uid=\${DB_USER};/" "${TARGET_WEB_CONFIG}"
-    #     sed -i "s/pwd=[^;]*;/pwd=\${DB_PASSWORD};/" "${TARGET_WEB_CONFIG}"
-    #     echo "✓ Template created."
-    # fi
-
-    # 创建标记文件
+    # 创建标记文件（表示首次初始化完成）
     touch "${MARKER_FILE}"
     echo "✓ Initialization complete. Marker file created."
 else
-    echo "⏭️ Not first run (marker file exists). Skipping source update and template generation."
+    echo "⏭️ Not first run (marker file exists). Skipping source update."
 fi
 
-# ========== 自动恢复 web.config（如果缺失）==========
+# ========== 确保 web.config 存在（如果缺失则从默认备份恢复）==========
 if [ ! -f "${TARGET_WEB_CONFIG}" ]; then
-    echo "⚠️ Target web.config not found. Attempting to restore from default template..."
+    echo "⚠️ Target web.config not found. Restoring from default template..."
     if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
         cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
-        echo "✓ Restored web.config from default template (${DEFAULT_WEB_CONFIG})."
+        echo "✓ Restored web.config from default template."
     else
         echo "❌ ERROR: Default web.config not found in image. Cannot proceed."
         exit 1
