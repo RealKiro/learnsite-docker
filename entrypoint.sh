@@ -3,16 +3,15 @@ set -e
 
 # ========== 配置区域 ==========
 REPO_URL="https://gitee.com/jnschool/learnsite-wz.git"
-CUSTOM_WEB_CONFIG_URL="https://gitee.com/jnschool/game/raw/master/LearnSite_ChengDu/web.config"
+CUSTOM_WEB_CONFIG_URL="https://gitee.com/jnschool/game/raw/master/LearnSite_ChengDu/web.config"  # 确保是 Raw 链接
 SRC_TMP="/tmp/learnsite-src"
 APP_DIR="/app"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
-TEMPLATE_WEB_CONFIG="${APP_DIR}/web.config.template"
 MARKER_FILE="${APP_DIR}/.initialized"
 # ==============================
 
 echo "========================================="
-echo "Starting LearnSite dynamic setup"
+echo "Starting LearnSite dynamic setup (template only)"
 echo "========================================="
 
 # 检查是否为第一次运行（标记文件不存在）
@@ -60,49 +59,25 @@ if [ ! -f "${MARKER_FILE}" ]; then
         echo "⚠️ Failed to download custom web.config. Keeping original from source."
     fi
 
-    # 步骤6：创建模板文件并替换具体值为占位符
-    cp ${TARGET_WEB_CONFIG} ${TEMPLATE_WEB_CONFIG}
-    echo "✓ Created template file: ${TEMPLATE_WEB_CONFIG}"
-
-    # 将模板中的具体数据库连接参数替换为占位符
-    # 注意：如果原始 web.config 格式不同，请调整下面的正则表达式
-    sed -i "s/Data Source=[^;]*;/Data Source=\${DB_HOST};/" ${TEMPLATE_WEB_CONFIG}
-    sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=\${DB_NAME};/" ${TEMPLATE_WEB_CONFIG}
-    sed -i "s/uid=[^;]*;/uid=\${DB_USER};/" ${TEMPLATE_WEB_CONFIG}
-    sed -i "s/pwd=[^;]*;/pwd=\${DB_PASSWORD};/" ${TEMPLATE_WEB_CONFIG}
-    echo "✓ Replaced connection string values with placeholders in template."
+    # 步骤6：将 web.config 中的具体数据库连接参数替换为占位符（生成模板）
+    echo "Converting web.config to template with placeholders..."
+    sed -i "s/Data Source=[^;]*;/Data Source=\${DB_HOST};/" ${TARGET_WEB_CONFIG}
+    sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=\${DB_NAME};/" ${TARGET_WEB_CONFIG}
+    sed -i "s/uid=[^;]*;/uid=\${DB_USER};/" ${TARGET_WEB_CONFIG}
+    sed -i "s/pwd=[^;]*;/pwd=\${DB_PASSWORD};/" ${TARGET_WEB_CONFIG}
+    echo "✓ Template created. Placeholders are now in web.config."
 
     # 创建标记文件
     touch "${MARKER_FILE}"
     echo "✓ Initialization complete. Marker file created."
 else
-    echo "⏭️ Not first run (marker file exists). Skipping source update and template creation."
+    echo "⏭️ Not first run (marker file exists). Skipping source update."
 fi
 
-# ========== 每次启动都会执行的步骤 ==========
-# 从模板生成最终的 web.config（使用环境变量替换占位符）
-if [ -f "${TEMPLATE_WEB_CONFIG}" ]; then
-    echo "Generating final web.config from template using envsubst..."
-    if command -v envsubst >/dev/null 2>&1; then
-        envsubst < "${TEMPLATE_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}"
-        echo "✓ Final web.config generated."
-    else
-        echo "⚠️ envsubst not found. Falling back to direct sed replacement on web.config."
-        # 后备方案：直接修改 web.config（可能不精确，但避免失败）
-        sed -i "s/Data Source=[^;]*;/Data Source=${DB_HOST};/" ${TARGET_WEB_CONFIG}
-        sed -i "s/Initial Catalog=[^;]*;/Initial Catalog=${DB_NAME};/" ${TARGET_WEB_CONFIG}
-        sed -i "s/uid=[^;]*;/uid=${DB_USER};/" ${TARGET_WEB_CONFIG}
-        sed -i "s/pwd=[^;]*;/pwd=${DB_PASSWORD};/" ${TARGET_WEB_CONFIG}
-    fi
-else
-    echo "❌ Error: Template file ${TEMPLATE_WEB_CONFIG} not found!"
-    exit 1
-fi
-
-# 可选：如果需要用 envsubst 处理其他文件，可以在这里添加
+# 注意：不再执行 envsubst，web.config 始终保持模板状态
 
 echo "========================================="
-echo "Starting web server..."
+echo "Starting web server with template web.config..."
 echo "========================================="
 
 exec "$@"
