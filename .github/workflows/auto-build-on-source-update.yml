@@ -42,12 +42,10 @@ jobs:
 
       # 3. 如果来源是 gitee，检查更新并获取提交信息
       - name: Fetch Gitee source and check for updates
-        id: check_commit
-        if: steps.source.outputs.source == 'gitee'
         run: |
           mkdir temp-source
           cd temp-source
-          git init
+          git init -b main   # 指定分支名
           git remote add origin https://gitee.com/jnschool/learnsite-wz.git
           git fetch --depth 1 origin master 2>&1 || git fetch --depth 1 origin main 2>&1
           LATEST_SHA=$(git rev-parse FETCH_HEAD)
