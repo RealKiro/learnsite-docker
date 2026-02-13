@@ -42,17 +42,23 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update && \
     apt-get install -y git && \
     rm -rf /var/lib/apt/lists/*
 
-# ========== 8. 设置中文环境变量 ==========
+# ========== 8. 安装 envsubst（来自 gettext-base，用于模板变量替换）==========
+RUN apt-get -o Acquire::Check-Valid-Until=false update && \
+    apt-get install -y gettext-base && \
+    rm -rf /var/lib/apt/lists/*
+
+# ========== 9. 设置中文环境变量 ==========
 ENV LANG=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 ENV LC_ALL=zh_CN.UTF-8
 
-# ========== 9. 复制 entrypoint 脚本和本地 web.config ==========
+# ========== 10. 复制 entrypoint 脚本和默认 web.config ==========
 COPY entrypoint.sh /usr/local/bin/
-COPY web.config /usr/local/bin/
+# 复制默认 web.config 模板到镜像内（用于恢复）
+COPY web.config /usr/local/share/default-web.config
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# ========== 10. 应用目录和启动配置 ==========
+# ========== 11. 应用目录和启动配置 ==========
 WORKDIR /app
 EXPOSE 8080
 
