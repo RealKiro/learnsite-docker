@@ -1,11 +1,19 @@
 name: Auto-build LearnSite on Source Update
 
-# 1. 触发方式：定时轮询（例如每小时检查一次） + 支持手动触发
 on:
   schedule:
-    # 每月5日凌晨2:30执行一次（UTC时间），对应北京时间10:30
+    # 每月5日凌晨2:30 UTC执行一次
     - cron: '30 2 5 * *'
-  workflow_dispatch: # 允许手动触发测试
+  workflow_dispatch:
+    inputs:
+      build_source:
+        description: 'Build source (gitee or local)'
+        required: true
+        default: 'gitee'
+        type: choice
+        options:
+          - gitee
+          - local
 
 jobs:
   check-and-build:
@@ -16,141 +24,122 @@ jobs:
       commit_sha: ${{ steps.get_commit_sha.outputs.commit_sha }}
 
     steps:
-      # 2. 检出当前仓库（用于读取上次记录的commit或后续操作）
+      # 1. 检出当前仓库（始终需要，因为包含自定义配置和记录文件）
       - name: Checkout own repo
         uses: actions/checkout@v4
         with:
           path: my-repo
 
-      # 3. 临时拉取Gitee源码以检查更新
+      # 2. 根据输入决定构建来源
+      - name: Determine build source
+        id: source
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "source=gitee" >> $GITHUB_OUTPUT
+          else
+            echo "source=${{ github.event.inputs.build_source }}" >> $GITHUB_OUTPUT
+          fi
+
+      # 3. 如果来源是 gitee，检查更新并获取提交信息
       - name: Fetch Gitee source and check for updates
         id: check_commit
+        if: steps.source.outputs.source == 'gitee'
         run: |
-          # 创建一个临时目录来拉取源码
           mkdir temp-source
           cd temp-source
-          
-          # 初始化一个空的git仓库，只拉取最新的元数据而不检出文件（速度更快）
           git init
           git remote add origin https://gitee.com/jnschool/learnsite-wz.git
           git fetch --depth 1 origin master 2>&1 || git fetch --depth 1 origin main 2>&1
-          
-          # 获取最新提交的SHA和提交时间戳
           LATEST_SHA=$(git rev-parse FETCH_HEAD)
-          LATEST_COMMIT_TIME=$(git show -s --format=%ct FETCH_HEAD) # Unix时间戳
-          
+          LATEST_COMMIT_TIME=$(git show -s --format=%ct FETCH_HEAD)
           echo "Latest commit SHA: $LATEST_SHA"
-          echo "Latest commit time (UTC): $LATEST_COMMIT_TIME"
-          
-          # 读取上次成功构建时记录的commit SHA（假设存储在my-repo/last_build_commit.txt）
+          echo "commit_sha=$LATEST_SHA" >> $GITHUB_OUTPUT
+          echo "commit_time=$LATEST_COMMIT_TIME" >> $GITHUB_OUTPUT
+
+          # 读取上次构建的commit记录
           LAST_BUILD_SHA=""
           if [ -f my-repo/last_build_commit.txt ]; then
             LAST_BUILD_SHA=$(cat my-repo/last_build_commit.txt)
           fi
-          
-          # 比较SHA，判断是否有新提交
+
           if [ "$LATEST_SHA" != "$LAST_BUILD_SHA" ]; then
             echo "new_commit=true" >> $GITHUB_OUTPUT
-            echo "New commit detected. Proceeding with build."
           else
             echo "new_commit=false" >> $GITHUB_OUTPUT
             echo "No new commit. Skipping build."
           fi
-          
-          # 将最新信息传递给后续步骤
-          echo "commit_sha=$LATEST_SHA" >> $GITHUB_OUTPUT
-          echo "commit_time=$LATEST_COMMIT_TIME" >> $GITHUB_OUTPUT
 
-      # 4. 格式化提交时间为镜像标签格式 (YYYYMMDD-HHMMSS)
-      - name: Format commit time for Docker tag
-        id: format_time
-        if: steps.check_commit.outputs.new_commit == 'true'
+      # 4. 如果是手动触发且来源为 local，直接使用本地文件构建
+      - name: Prepare build context from local
+        if: steps.source.outputs.source == 'local'
         run: |
-          # 将Unix时间戳转换为UTC时间的YYYYMMDD-HHMMSS格式
-          FORMATTED_TIME=$(date -u -d @${{ steps.check_commit.outputs.commit_time }} +'%Y%m%d-%H%M%S')
-          echo "Formatted time: $FORMATTED_TIME"
-          echo "formatted_time=$FORMATTED_TIME" >> $GITHUB_OUTPUT
-
-      # 5. 如果有新提交，克隆完整源码并正确准备构建目录
-      - name: Clone full source and prepare build context
-        if: steps.check_commit.outputs.new_commit == 'true'
-        run: |
-          # 创建目标构建目录
           mkdir -p app-source
-          
-          # 克隆完整仓库
+          # 复制当前仓库的所有文件到构建目录（排除 .git 和自身）
+          rsync -av --exclude='.git' --exclude='my-repo' ./ app-source/
+          echo "Using local files for build."
+
+      # 5. 如果来源是 gitee 且有新提交，克隆源码并准备构建目录
+      - name: Clone Gitee source and prepare build context
+        if: steps.source.outputs.source == 'gitee' && steps.check_commit.outputs.new_commit == 'true'
+        run: |
+          mkdir -p app-source
           git clone https://gitee.com/jnschool/learnsite-wz.git learnsite-source
           cd learnsite-source
-          
-          # 检查并定位实际源码位置（关键修复）
+          # 定位实际源码目录（根据之前经验）
           if [ -d "LearnSiteDev" ]; then
-            echo "Found LearnSiteDev directory. Using it as source root."
-            # 将 LearnSiteDev 的内容移动到 app-source
             mv LearnSiteDev/* ../app-source/
-            # 同时移动可能存在的隐藏文件（如 .htaccess 等）
             mv LearnSiteDev/.[!.]* ../app-source/ 2>/dev/null || true
           elif [ -d "LearnSite_ChengDu" ]; then
-            echo "Found LearnSite_ChengDu directory. Using it as source root."
             mv LearnSite_ChengDu/* ../app-source/
             mv LearnSite_ChengDu/.[!.]* ../app-source/ 2>/dev/null || true
           else
-            echo "No specific subdirectory found. Assuming root is the source."
-            # 如果根目录就是源码，移动所有文件（排除 .git 目录）
             rsync -av --exclude='.git' ./ ../app-source/
           fi
-          
-          # 返回上级目录并清理
           cd ..
           rm -rf learnsite-source
-          
-          # 验证 app-source 目录内容（可选，用于调试）
-          echo "Contents of app-source:"
-          ls -la app-source/
 
-      # 6. 替换为自定义的web.config和其他必要文件
+      # 6. 替换为自定义配置（总是从 my-repo 复制）
       - name: Replace with custom configs
-        if: steps.check_commit.outputs.new_commit == 'true'
+        if: steps.source.outputs.source == 'gitee' && steps.check_commit.outputs.new_commit == 'true' || steps.source.outputs.source == 'local'
         run: |
-          # 确保构建目录存在
-          mkdir -p app-source
-          # 复制自定义配置（假设这些文件在my-repo根目录）
-          cp my-repo/web.config app-source/
-          cp my-repo/Dockerfile app-source/ 2>/dev/null || echo "Dockerfile not found, using default."
-          cp my-repo/entrypoint.sh app-source/ 2>/dev/null || echo "entrypoint.sh not found."
+          cp my-repo/web.config app-source/ 2>/dev/null || echo "Warning: web.config not found in my-repo"
+          cp my-repo/Dockerfile app-source/ 2>/dev/null || echo "Warning: Dockerfile not found in my-repo, using default if exists"
+          cp my-repo/entrypoint.sh app-source/ 2>/dev/null || echo "Warning: entrypoint.sh not found in my-repo"
 
-      # 7. 登录Docker Hub
+      # 7. 格式化提交时间（仅对 gitee 来源有效）
+      - name: Format commit time for Docker tag
+        id: format_time
+        if: steps.source.outputs.source == 'gitee' && steps.check_commit.outputs.new_commit == 'true'
+        run: |
+          FORMATTED_TIME=$(date -u -d @${{ steps.check_commit.outputs.commit_time }} +'%Y%m%d-%H%M%S')
+          echo "formatted_time=$FORMATTED_TIME" >> $GITHUB_OUTPUT
+
+      # 8. 登录 Docker Hub
       - name: Login to Docker Hub
-        if: steps.check_commit.outputs.new_commit == 'true'
+        if: steps.source.outputs.source == 'gitee' && steps.check_commit.outputs.new_commit == 'true' || steps.source.outputs.source == 'local'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 8. 构建并推送镜像（使用格式化后的提交时间作为主标签）
+      # 9. 构建并推送镜像
       - name: Build and push
-        if: steps.check_commit.outputs.new_commit == 'true'
+        if: steps.source.outputs.source == 'gitee' && steps.check_commit.outputs.new_commit == 'true' || steps.source.outputs.source == 'local'
         uses: docker/build-push-action@v5
         with:
           context: ./app-source
           file: ./app-source/Dockerfile
           push: true
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/learnsite-web:${{ steps.format_time.outputs.formatted_time }}
+            ${{ secrets.DOCKER_USERNAME }}/learnsite-web:${{ steps.source.outputs.source == 'gitee' && steps.format_time.outputs.formatted_time || 'manual' }}
             ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.check_commit.outputs.commit_sha }}
-            org.opencontainers.image.created=${{ steps.check_commit.outputs.commit_time }}
+            org.opencontainers.image.revision=${{ steps.source.outputs.source == 'gitee' && steps.check_commit.outputs.commit_sha || github.sha }}
 
-      # 9. 构建成功后，记录本次构建的commit SHA
-      - name: Record last build commit
-        if: steps.check_commit.outputs.new_commit == 'true'
+      # 10. 如果是 gitee 构建且成功，记录本次构建的commit SHA
+      - name: Record last build commit (gitee only)
+        if: steps.source.outputs.source == 'gitee' && steps.check_commit.outputs.new_commit == 'true'
         run: |
           echo ${{ steps.check_commit.outputs.commit_sha }} > my-repo/last_build_commit.txt
-          # 可选：将更新后的记录文件推送回仓库（需配置git权限）
-          # cd my-repo
-          # git config user.name "github-actions[bot]"
-          # git config user.email "github-actions[bot]@users.noreply.github.com"
-          # git add last_build_commit.txt
-          # git commit -m "Update last build commit to ${{ steps.check_commit.outputs.commit_sha }}"
-          # git push
+          # 可选：推送回仓库（需配置git权限）
