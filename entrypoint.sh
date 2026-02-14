@@ -4,6 +4,8 @@ set -e
 # ========== 配置区域 ==========
 # 主源码仓库地址（请根据您的实际仓库修改）
 REPO_URL="https://github.com/RealKiro/learnsite.git"
+# 备用下载链接，用于当仓库中缺少 learnsite.sql 时自动补全（请确保链接有效）
+BACKUP_SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
 # 应用目录（容器内）
 APP_DIR="/app"
 # 持久化状态目录，用于存放上次构建的commit和标记文件（独立于源码，避免被覆盖）
@@ -16,12 +18,10 @@ MARKER_FILE="${APP_DIR}/.initialized"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
 # 镜像内的默认 web.config 模板（由 Dockerfile 复制）
 DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
-# learnsite.sql 文件的 Raw 下载地址（用于快速修正）
-SQL_FILE_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
 # ==============================
 
 echo "========================================="
-echo "Starting LearnSite dynamic setup (with direct clone and manual sql download)"
+echo "Starting LearnSite dynamic setup (optimized)"
 echo "========================================="
 
 # 确保状态目录存在（后续会临时备份）
@@ -76,30 +76,7 @@ if [ ! -f "${MARKER_FILE}" ]; then
             mkdir -p "${STATE_DIR}"
         fi
 
-        # ========== 快速修正：手动下载 learnsite.sql 文件 ==========
-        # 确保 sql 目录存在
-        mkdir -p "${APP_DIR}/sql"
-        echo "Downloading learnsite.sql from ${SQL_FILE_URL}..."
-        if command -v curl >/dev/null 2>&1; then
-            curl -fsSL -o "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
-        elif command -v wget >/dev/null 2>&1; then
-            wget -q -O "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
-        else
-            echo "❌ Neither curl nor wget found. Cannot download learnsite.sql."
-            exit 1
-        fi
-        # 检查下载是否成功
-        if [ -s "${APP_DIR}/sql/learnsite.sql" ]; then
-            echo "✓ learnsite.sql downloaded successfully."
-        else
-            echo "❌ Failed to download learnsite.sql (file is empty)."
-            exit 1
-        fi
-        # ===========================================================
-
-        # 记录本次构建的 commit
-        echo "${REMOTE_MAIN_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
-        echo "✓ Main source updated (direct clone to /app)."
+        echo "✓ Main source cloned."
     else
         # 如果主源码未更新，但 /app 可能为空（例如卷丢失），则强制更新
         if [ ! -d "${APP_DIR}" ] || [ -z "$(ls -A "${APP_DIR}" 2>/dev/null)" ]; then
@@ -120,29 +97,26 @@ if [ ! -f "${MARKER_FILE}" ]; then
                 mkdir -p "${STATE_DIR}"
             fi
 
-            # ========== 快速修正：手动下载 learnsite.sql 文件 ==========
-            mkdir -p "${APP_DIR}/sql"
-            echo "Downloading learnsite.sql from ${SQL_FILE_URL}..."
-            if command -v curl >/dev/null 2>&1; then
-                curl -fsSL -o "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
-            elif command -v wget >/dev/null 2>&1; then
-                wget -q -O "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
-            else
-                echo "❌ Neither curl nor wget found. Cannot download learnsite.sql."
-                exit 1
-            fi
-            if [ -s "${APP_DIR}/sql/learnsite.sql" ]; then
-                echo "✓ learnsite.sql downloaded successfully."
-            else
-                echo "❌ Failed to download learnsite.sql (file is empty)."
-                exit 1
-            fi
-            # ===========================================================
-
-            echo "${REMOTE_MAIN_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
-            echo "✓ Main source updated (forced clone)."
+            echo "✓ Main source forced cloned."
         fi
     fi
+
+    # ========== 确保 learnsite.sql 存在 ==========
+    mkdir -p /app/sql
+    if [ ! -f /app/sql/learnsite.sql ]; then
+        echo "⚠️ learnsite.sql not found in cloned source. Downloading from backup URL..."
+        # 使用 curl 下载备用文件，-f 使失败时返回错误码，-sSL 静默但显示错误
+        curl -f -sSL -o /app/sql/learnsite.sql "${BACKUP_SQL_URL}"
+        if [ $? -eq 0 ] && [ -f /app/sql/learnsite.sql ]; then
+            echo "✓ learnsite.sql downloaded successfully."
+        else
+            echo "❌ Failed to download learnsite.sql. Database initialization may fail."
+            # 不退出，让后续步骤继续（可能已有其他文件）
+        fi
+    else
+        echo "✓ learnsite.sql found in source."
+    fi
+    # ===========================================
 
     # 复制默认 web.config 模板到目标位置（覆盖克隆下来的 web.config）
     if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
