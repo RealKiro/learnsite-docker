@@ -3,7 +3,7 @@ set -e
 
 # ========== 配置区域 ==========
 # 主源码仓库地址（请根据您的实际仓库修改）
-REPO_URL="https://github.com/RealKiro/learnsite-docker.git"
+REPO_URL="https://github.com/RealKiro/learnsite.git"
 # 应用目录（容器内）
 APP_DIR="/app"
 # 持久化状态目录，用于存放上次构建的commit和标记文件（独立于源码，避免被覆盖）
@@ -16,10 +16,12 @@ MARKER_FILE="${APP_DIR}/.initialized"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
 # 镜像内的默认 web.config 模板（由 Dockerfile 复制）
 DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
+# learnsite.sql 文件的 Raw 下载地址（用于快速修正）
+SQL_FILE_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
 # ==============================
 
 echo "========================================="
-echo "Starting LearnSite dynamic setup (with direct clone)"
+echo "Starting LearnSite dynamic setup (with direct clone and manual sql download)"
 echo "========================================="
 
 # 确保状态目录存在（后续会临时备份）
@@ -74,6 +76,27 @@ if [ ! -f "${MARKER_FILE}" ]; then
             mkdir -p "${STATE_DIR}"
         fi
 
+        # ========== 快速修正：手动下载 learnsite.sql 文件 ==========
+        # 确保 sql 目录存在
+        mkdir -p "${APP_DIR}/sql"
+        echo "Downloading learnsite.sql from ${SQL_FILE_URL}..."
+        if command -v curl >/dev/null 2>&1; then
+            curl -fsSL -o "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -q -O "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
+        else
+            echo "❌ Neither curl nor wget found. Cannot download learnsite.sql."
+            exit 1
+        fi
+        # 检查下载是否成功
+        if [ -s "${APP_DIR}/sql/learnsite.sql" ]; then
+            echo "✓ learnsite.sql downloaded successfully."
+        else
+            echo "❌ Failed to download learnsite.sql (file is empty)."
+            exit 1
+        fi
+        # ===========================================================
+
         # 记录本次构建的 commit
         echo "${REMOTE_MAIN_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
         echo "✓ Main source updated (direct clone to /app)."
@@ -96,6 +119,25 @@ if [ ! -f "${MARKER_FILE}" ]; then
             else
                 mkdir -p "${STATE_DIR}"
             fi
+
+            # ========== 快速修正：手动下载 learnsite.sql 文件 ==========
+            mkdir -p "${APP_DIR}/sql"
+            echo "Downloading learnsite.sql from ${SQL_FILE_URL}..."
+            if command -v curl >/dev/null 2>&1; then
+                curl -fsSL -o "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
+            elif command -v wget >/dev/null 2>&1; then
+                wget -q -O "${APP_DIR}/sql/learnsite.sql" "${SQL_FILE_URL}"
+            else
+                echo "❌ Neither curl nor wget found. Cannot download learnsite.sql."
+                exit 1
+            fi
+            if [ -s "${APP_DIR}/sql/learnsite.sql" ]; then
+                echo "✓ learnsite.sql downloaded successfully."
+            else
+                echo "❌ Failed to download learnsite.sql (file is empty)."
+                exit 1
+            fi
+            # ===========================================================
 
             echo "${REMOTE_MAIN_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
             echo "✓ Main source updated (forced clone)."
