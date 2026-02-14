@@ -2,13 +2,20 @@
 set -e
 
 # ========== 配置区域 ==========
-REPO_URL="https://github.com/RealKiro/learnsite.git"          # 主仓库地址
+# 主源码仓库地址（请根据您的实际仓库修改）
+REPO_URL="https://github.com/RealKiro/learnsite.git"
+# 应用目录（容器内）
 APP_DIR="/app"
-STATE_DIR="${APP_DIR}/.state"                                  # 持久化状态目录
-LAST_MAIN_COMMIT_FILE="${STATE_DIR}/last_main_commit"          # 上次主源码 commit
-MARKER_FILE="${APP_DIR}/.initialized"                          # 初始化标记
+# 持久化状态目录，用于存放上次构建的commit和标记文件
+STATE_DIR="${APP_DIR}/.state"
+# 上次成功构建的主源码commit记录文件
+LAST_MAIN_COMMIT_FILE="${STATE_DIR}/last_main_commit"
+# 初始化标记文件，存在表示已执行过首次初始化
+MARKER_FILE="${APP_DIR}/.initialized"
+# 目标 web.config 路径
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
-DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"       # 镜像内的默认备份
+# 镜像内的默认 web.config 模板（由 Dockerfile 复制）
+DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
 # ==============================
 
 echo "========================================="
@@ -27,7 +34,7 @@ get_remote_main_commit() {
 if [ ! -f "${MARKER_FILE}" ]; then
     echo "🚀 First run detected. Checking for existing valid source..."
 
-    # 读取上次记录的 commit
+    # 读取上次记录的 commit（如果存在）
     PREV_MAIN_COMMIT=""
     [ -f "${LAST_MAIN_COMMIT_FILE}" ] && PREV_MAIN_COMMIT=$(cat "${LAST_MAIN_COMMIT_FILE}")
 
@@ -51,33 +58,43 @@ if [ ! -f "${MARKER_FILE}" ]; then
         echo "Updating main source from ${REPO_URL}..."
         SRC_TMP="/tmp/learnsite-src"
         rm -rf "${SRC_TMP}"
+        # 克隆最新源码（深度1，只取最新提交）
         git clone --depth 1 "${REPO_URL}" "${SRC_TMP}"
 
-        # 清空 /app 但保留状态目录和标记文件（当前标记文件还不存在，所以无需特别保留）
+        # 清空 /app 目录，但保留 .state 目录及其内容
         find "${APP_DIR}" -mindepth 1 -not -path "${STATE_DIR}" -not -path "${STATE_DIR}/*" -delete 2>/dev/null || true
 
-        # 复制新源码（根据仓库结构灵活处理）
+        # 将克隆的源码复制到 /app 目录
+        echo "Copying source code to ${APP_DIR}..."
+        # 根据仓库实际结构，支持多种可能的子目录
         if [ -d "${SRC_TMP}/LearnSiteDev" ]; then
+            # 如果存在 LearnSiteDev 子目录，复制其内容
             cp -r "${SRC_TMP}/LearnSiteDev/"* "${APP_DIR}/" 2>/dev/null || true
             cp -r "${SRC_TMP}/LearnSiteDev/".[!.]* "${APP_DIR}/" 2>/dev/null || true
         elif [ -d "${SRC_TMP}/src" ]; then
+            # 如果存在 src 子目录
             cp -r "${SRC_TMP}/src/"* "${APP_DIR}/" 2>/dev/null || true
             cp -r "${SRC_TMP}/src/".[!.]* "${APP_DIR}/" 2>/dev/null || true
         elif [ -d "${SRC_TMP}/Source" ]; then
+            # 如果存在 Source 子目录
             cp -r "${SRC_TMP}/Source/"* "${APP_DIR}/" 2>/dev/null || true
             cp -r "${SRC_TMP}/Source/".[!.]* "${APP_DIR}/" 2>/dev/null || true
         else
+            # 否则直接复制根目录所有内容
             cp -r "${SRC_TMP}/"* "${APP_DIR}/" 2>/dev/null || true
             cp -r "${SRC_TMP}/".[!.]* "${APP_DIR}/" 2>/dev/null || true
         fi
 
+        # 清理临时源码
         rm -rf "${SRC_TMP}"
+        # 记录本次构建的 commit
         echo "${REMOTE_MAIN_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
         echo "✓ Main source updated."
     else
         # 如果主源码未更新，但 /app 可能为空（例如卷丢失），则强制更新
         if [ ! -d "${APP_DIR}" ] || [ -z "$(ls -A "${APP_DIR}")" ]; then
             echo "⚠️ /app is empty but commit record exists. Forcing main source update."
+            # 重新克隆（逻辑同上，为简化可调用自身？但直接重复代码更清晰）
             SRC_TMP="/tmp/learnsite-src"
             git clone --depth 1 "${REPO_URL}" "${SRC_TMP}"
             find "${APP_DIR}" -mindepth 1 -not -path "${STATE_DIR}" -not -path "${STATE_DIR}/*" -delete 2>/dev/null || true
@@ -99,7 +116,7 @@ if [ ! -f "${MARKER_FILE}" ]; then
         fi
     fi
 
-    # ====== 关键修改：在首次运行时强制从默认备份复制 web.config ======
+    # 复制默认 web.config 模板到目标位置（覆盖源码中可能自带的 web.config）
     if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
         echo "Copying default web.config template to ${TARGET_WEB_CONFIG}"
         cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
@@ -109,7 +126,7 @@ if [ ! -f "${MARKER_FILE}" ]; then
         exit 1
     fi
 
-    # 创建标记文件
+    # 创建标记文件，表示首次初始化完成
     touch "${MARKER_FILE}"
     echo "✓ Initialization complete. Marker file created."
 else
@@ -126,6 +143,7 @@ fi
 # ========== 使用 envsubst 替换环境变量占位符 ==========
 if command -v envsubst >/dev/null 2>&1; then
     echo "Applying environment variables to web.config..."
+    # 使用临时文件避免同时读写
     envsubst < "${TARGET_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}.tmp" && mv "${TARGET_WEB_CONFIG}.tmp" "${TARGET_WEB_CONFIG}"
     echo "✓ Environment variables applied."
 else
