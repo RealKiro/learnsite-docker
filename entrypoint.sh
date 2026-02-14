@@ -2,10 +2,10 @@
 set -e
 
 # ========== 配置区域（可自定义）==========
-# 主要仓库地址（GitHub，作为主开发源）
-PRIMARY_REPO_URL="https://github.com/RealKiro/learnsite.git"
-# 备用仓库地址（Gitee，用于网络故障时切换）
-FALLBACK_REPO_URL="https://gitee.com/realiy/learnsite.git"
+# 主要仓库地址（建议使用稳定的 Gitee）
+PRIMARY_REPO_URL="https://gitee.com/realiy/learnsite.git"
+# 备用仓库地址（GitHub）
+FALLBACK_REPO_URL="https://github.com/RealKiro/learnsite.git"
 # 克隆重试次数
 CLONE_RETRIES=3
 # 重试间隔（秒）
