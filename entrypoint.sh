@@ -97,8 +97,10 @@ if [ ! -f "${MARKER_FILE}" ]; then
             cp -r "${STATE_DIR}" /tmp/state-backup
         fi
 
-        # 清空目标目录
-        rm -rf "${APP_DIR}"
+        # 清空 /app 目录内容，但保留目录本身（因为它是挂载点）
+        # 使用 find 递归删除所有内容，-mindepth 1 确保不删除挂载点根目录
+        echo "Cleaning up /app directory (keeping mount point)..."
+        find "${APP_DIR}" -mindepth 1 -delete 2>/dev/null || true
 
         # 先尝试从主要仓库克隆
         if clone_repo "${PRIMARY_REPO_URL}" "${APP_DIR}"; then
@@ -136,7 +138,8 @@ if [ ! -f "${MARKER_FILE}" ]; then
                 cp -r "${STATE_DIR}" /tmp/state-backup
             fi
 
-            rm -rf "${APP_DIR}"
+            # 清空目录内容
+            find "${APP_DIR}" -mindepth 1 -delete 2>/dev/null || true
 
             # 尝试主要仓库
             if ! clone_repo "${PRIMARY_REPO_URL}" "${APP_DIR}"; then
