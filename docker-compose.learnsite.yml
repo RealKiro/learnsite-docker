@@ -9,14 +9,11 @@ services:
       # 宿主机端口映射，如果 8080 被占用可改为其他，例如 "8081:8080"
       - "8080:8080"
     volumes:
-      # 【重要】请根据你的操作系统选择以下一种挂载方式（取消注释，注释掉另一种）
-      # ---------- Linux 环境 ----------
+      # 使用绑定挂载，将宿主机的 /docker_data/learnsite/app 挂载到容器的 /app
+      # 【重要】请根据您的操作系统修改宿主机路径（Linux 或群晖）
       - /docker_data/learnsite/app:/app
-      # ---------- 群晖 NAS 环境 ----------
-      # - /volume1/docker/learnsite/app:/app
-      # 可选：如需挂载自定义 web.config，可单独挂载文件（示例路径）
-      # - /docker_data/learnsite/my-web.config:/app/web.config   # Linux
-      # - /volume1/docker/learnsite/my-web.config:/app/web.config # 群晖
+      # 可选：如需挂载自定义 web.config，可单独挂载文件
+      # - /docker_data/learnsite/my-web.config:/app/web.config
     environment:
       - MONO_IOMAP=all
       # 数据库主机名（必须与 mssql 容器名一致）
@@ -26,7 +23,7 @@ services:
       # 数据库用户名（一般不变）
       - DB_USER=sa
       # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
-      - DB_PASSWORD=LearnSite!2025StrongPwd   # 【必须修改】
+      - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
     networks:
       - learnsite-net
     restart: always

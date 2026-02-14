@@ -41,9 +41,18 @@ jobs:
       - name: Start MSSQL server (CI version)
         run: |
           docker compose -f docker-compose.mssql-ci.yml up -d mssql
-          echo "Waiting for MSSQL to become healthy..."
-          timeout 90s bash -c "while [ \"\$(docker inspect --format='{{.State.Health.Status}}' mssql 2>/dev/null)\" != \"healthy\" ]; do sleep 3; done"
-          echo "MSSQL is healthy."
+          echo "Waiting for MSSQL to become healthy (max 180s)..."
+          timeout 180s bash -c "
+            while [ \"\$(docker inspect --format='{{.State.Health.Status}}' mssql 2>/dev/null)\" != \"healthy\" ]; do
+              echo 'Current health status: ' \$(docker inspect --format='{{.State.Health.Status}}' mssql)
+              sleep 5
+            done
+          " || {
+            echo "❌ MSSQL health check timed out. Full container logs:"
+            docker logs mssql
+            exit 1
+          }
+          echo "✅ MSSQL is healthy."
 
       # 启动初始化容器，它会从指定 URL 下载并执行 SQL 脚本
       - name: Start MSSQL init container (CI version)
