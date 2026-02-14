@@ -6,7 +6,6 @@ services:
     container_name: mssql
     environment:
       - ACCEPT_EULA=Y
-      # ↓↓↓ 必须修改为强密码，与 DB_PASSWORD 一致 ↓↓↓
       - MSSQL_SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
       - MSSQL_PID=Express
     ports:
@@ -29,15 +28,13 @@ services:
       mssql:
         condition: service_healthy
     environment:
-      # ↓↓↓ 必须与 MSSQL_SA_PASSWORD 一致 ↓↓↓
       - SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
     networks:
       - learnsite-net
     command: >
       /bin/bash -c "
-      # SQL 文件下载地址（请确认该链接可公开访问）
       SQL_URL='https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql'
-      echo 'Downloading learnsite.sql from $SQL_URL...'
+      echo 'Downloading learnsite.sql...'
       curl -f -sSL -o /tmp/learnsite.sql \$SQL_URL || { echo 'Download failed'; exit 1; }
       echo 'Executing SQL script...'
       /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P \"\$$SA_PASSWORD\" -i /tmp/learnsite.sql

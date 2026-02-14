@@ -2,20 +2,20 @@ version: '3.8'
 
 services:
   web:
-    # 镜像名称，如需使用自己的镜像请修改此处
-    image: orzg/learnsite-web:latest
+    build:
+      context: .
+      args:
+        UPDATE_SOURCE: 1        # CI 中通常希望拉取最新源码，可设为 1
     container_name: learnsite
     ports:
       - "8080:8080"
     volumes:
-      # CI 中使用命名卷，避免宿主机路径依赖
-      - learnsite_data:/app
+      - learnsite_data:/app      # CI 中使用命名卷，避免宿主机路径
     environment:
       - MONO_IOMAP=all
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
-      # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
     networks:
       - learnsite-net

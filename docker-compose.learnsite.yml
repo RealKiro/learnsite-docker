@@ -2,26 +2,28 @@ version: '3.8'
 
 services:
   web:
-    # 镜像名称，如需使用自己的镜像请修改此处
-    image: orzg/learnsite-web:latest
+    build:
+      context: .
+      args:
+        # 【用户可修改】设置为 1 表示构建时从 Git 拉取最新源码；0 表示不拉取（使用镜像内置源码）
+        UPDATE_SOURCE: 0   # 0 或 1
     container_name: learnsite
     ports:
-      # 宿主机端口映射，如果 8080 被占用可改为其他，例如 "8081:8080"
-      - "8080:8080"
+      - "8080:8080"        # 宿主机端口，如果被占用可改为其他，例如 "8081:8080"
     volumes:
-      # 使用绑定挂载，将宿主机的 /docker_data/learnsite/app 挂载到容器的 /app
-      # 【重要】请根据您的操作系统修改宿主机路径（Linux 或群晖）
+      # 【重要】根据操作系统选择以下一种挂载方式（取消注释，注释掉另一种）
+      # ---------- Linux 环境 ----------
       - /docker_data/learnsite/app:/app
+      # ---------- 群晖 NAS 环境 ----------
+      # - /volume1/docker/learnsite/app:/app
       # 可选：如需挂载自定义 web.config，可单独挂载文件
-      # - /docker_data/learnsite/my-web.config:/app/web.config
+      # - /docker_data/learnsite/my-web.config:/app/web.config   # Linux
+      # - /volume1/docker/learnsite/my-web.config:/app/web.config # 群晖
     environment:
       - MONO_IOMAP=all
-      # 数据库主机名（必须与 mssql 容器名一致）
-      - DB_HOST=mssql
-      # 数据库名称（可自定义，但需与初始化脚本一致）
-      - DB_NAME=learnsite
-      # 数据库用户名（一般不变）
-      - DB_USER=sa
+      - DB_HOST=mssql          # 数据库服务名（必须与 mssql 容器名一致）
+      - DB_NAME=learnsite      # 数据库名称
+      - DB_USER=sa             # 数据库用户名
       # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
     networks:
@@ -30,4 +32,4 @@ services:
 
 networks:
   learnsite-net:
-    driver: bridge
+    driver: bridge            # 自动创建 bridge 网络
