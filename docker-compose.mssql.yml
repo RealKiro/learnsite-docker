@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # SQL Server 数据库服务
   mssql:
     image: mcr.microsoft.com/mssql/server:2019-latest
     container_name: mssql
@@ -11,15 +10,17 @@ services:
       - MSSQL_SA_PASSWORD=LearnSite!2025StrongPwd   # 【必须修改】
       - MSSQL_PID=Express
     ports:
-      # 宿主机端口映射，如需外部连接数据库可保留；如仅内部使用可删除此行
+      # 宿主机端口映射，如需外部连接数据库可保留；如仅内部使用可删除
       - "1433:1433"
     volumes:
-      # 使用命名卷持久化数据库文件
-      - mssql_data:/var/opt/mssql
+      # 【重要】请根据你的操作系统选择以下一种挂载方式（取消注释，注释掉另一种）
+      # ---------- Linux 环境 ----------
+      - /docker_data/mssql/data:/var/opt/mssql
+      # ---------- 群晖 NAS 环境 ----------
+      # - /volume1/docker/mssql/data:/var/opt/mssql
     networks:
       - learnsite-net
     healthcheck:
-      # 使用环境变量引用密码，避免硬编码
       test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"
       interval: 10s
       timeout: 5s
@@ -27,7 +28,6 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-  # 数据库初始化辅助服务（仅首次运行执行）
   mssql-init:
     image: mcr.microsoft.com/mssql-tools:latest
     depends_on:
@@ -37,24 +37,23 @@ services:
       # ↓↓↓ 必须与 MSSQL_SA_PASSWORD 一致 ↓↓↓
       - SA_PASSWORD=LearnSite!2025StrongPwd   # 【必须修改】
     volumes:
-      # 共享 learnsite 卷，读取其中的 sql 脚本
-      - learnsite_data:/learnsite
+      # 【重要】请根据你的操作系统选择以下一种挂载方式（取消注释，注释掉另一种）
+      # ---------- Linux 环境 ----------
+      - /docker_data/learnsite/app:/learnsite
+      # ---------- 群晖 NAS 环境 ----------
+      # - /volume1/docker/learnsite/app:/learnsite
     networks:
       - learnsite-net
     command: >
       /bin/bash -c "
-      # 检查标记文件是否存在，避免重复执行
       if [ ! -f /learnsite/.db-initialized ]; then
         echo 'First run: waiting for learnsite.sql...'
-        # 循环等待 learnsite.sql 文件出现（由 LearnSite 容器生成）
         while [ ! -f /learnsite/sql/learnsite.sql ]; do
           echo 'Waiting for learnsite.sql...';
           sleep 5;
         done
         echo 'Running /learnsite/sql/learnsite.sql';
-        # 执行 SQL 脚本
         /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P \"$$SA_PASSWORD\" -i /learnsite/sql/learnsite.sql && \
-        # 创建标记文件，表示初始化完成
         touch /learnsite/.db-initialized
         echo 'Initialization complete.'
       else
@@ -63,13 +62,6 @@ services:
       "
     restart: "no"
 
-# 定义两个命名卷
-volumes:
-  mssql_data:
-  learnsite_data:
-    # 注意：learnsite_data 与 learnsite 服务共享同一个卷
-
-# 使用外部网络
 networks:
   learnsite-net:
     external: true
