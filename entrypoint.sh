@@ -3,10 +3,10 @@ set -e
 
 # ========== 配置区域 ==========
 # 主源码仓库地址（请根据您的实际仓库修改）
-REPO_URL="https://github.com/RealKiro/learnsite.git"
+REPO_URL="https://github.com/RealKiro/learnsite-docker.git"
 # 应用目录（容器内）
 APP_DIR="/app"
-# 持久化状态目录，用于存放上次构建的commit和标记文件
+# 持久化状态目录，用于存放上次构建的commit和标记文件（独立于源码，避免被覆盖）
 STATE_DIR="${APP_DIR}/.state"
 # 上次成功构建的主源码commit记录文件
 LAST_MAIN_COMMIT_FILE="${STATE_DIR}/last_main_commit"
@@ -19,10 +19,10 @@ DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
 # ==============================
 
 echo "========================================="
-echo "Starting LearnSite dynamic setup (with envsubst)"
+echo "Starting LearnSite dynamic setup (with direct clone)"
 echo "========================================="
 
-# 确保状态目录存在
+# 确保状态目录存在（后续会临时备份）
 mkdir -p "${STATE_DIR}"
 
 # 函数：获取远程主仓库最新 commit
@@ -56,67 +56,53 @@ if [ ! -f "${MARKER_FILE}" ]; then
     # 如果需要更新主源码
     if [ "${NEED_UPDATE_MAIN}" = true ]; then
         echo "Updating main source from ${REPO_URL}..."
-        SRC_TMP="/tmp/learnsite-src"
-        rm -rf "${SRC_TMP}"
-        # 克隆最新源码（深度1，只取最新提交）
-        git clone --depth 1 "${REPO_URL}" "${SRC_TMP}"
 
-        # 清空 /app 目录，但保留 .state 目录及其内容
-        find "${APP_DIR}" -mindepth 1 -not -path "${STATE_DIR}" -not -path "${STATE_DIR}/*" -delete 2>/dev/null || true
-
-        # 将克隆的源码复制到 /app 目录
-        echo "Copying source code to ${APP_DIR}..."
-        # 根据仓库实际结构，支持多种可能的子目录
-        if [ -d "${SRC_TMP}/LearnSiteDev" ]; then
-            # 如果存在 LearnSiteDev 子目录，复制其内容
-            cp -r "${SRC_TMP}/LearnSiteDev/"* "${APP_DIR}/" 2>/dev/null || true
-            cp -r "${SRC_TMP}/LearnSiteDev/".[!.]* "${APP_DIR}/" 2>/dev/null || true
-        elif [ -d "${SRC_TMP}/src" ]; then
-            # 如果存在 src 子目录
-            cp -r "${SRC_TMP}/src/"* "${APP_DIR}/" 2>/dev/null || true
-            cp -r "${SRC_TMP}/src/".[!.]* "${APP_DIR}/" 2>/dev/null || true
-        elif [ -d "${SRC_TMP}/Source" ]; then
-            # 如果存在 Source 子目录
-            cp -r "${SRC_TMP}/Source/"* "${APP_DIR}/" 2>/dev/null || true
-            cp -r "${SRC_TMP}/Source/".[!.]* "${APP_DIR}/" 2>/dev/null || true
-        else
-            # 否则直接复制根目录所有内容
-            cp -r "${SRC_TMP}/"* "${APP_DIR}/" 2>/dev/null || true
-            cp -r "${SRC_TMP}/".[!.]* "${APP_DIR}/" 2>/dev/null || true
+        # 备份状态目录（避免被克隆覆盖）
+        if [ -d "${STATE_DIR}" ]; then
+            cp -r "${STATE_DIR}" /tmp/state-backup
         fi
 
-        # 清理临时源码
-        rm -rf "${SRC_TMP}"
+        # 直接克隆仓库到 /app（这会清空并替换 /app 下的所有内容）
+        rm -rf "${APP_DIR}"  # 先删除整个 /app 确保干净
+        git clone --depth 1 "${REPO_URL}" "${APP_DIR}"
+
+        # 恢复状态目录
+        if [ -d "/tmp/state-backup" ]; then
+            rm -rf "${STATE_DIR}" 2>/dev/null || true
+            mv /tmp/state-backup "${STATE_DIR}"
+        else
+            mkdir -p "${STATE_DIR}"
+        fi
+
         # 记录本次构建的 commit
         echo "${REMOTE_MAIN_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
-        echo "✓ Main source updated."
+        echo "✓ Main source updated (direct clone to /app)."
     else
         # 如果主源码未更新，但 /app 可能为空（例如卷丢失），则强制更新
-        if [ ! -d "${APP_DIR}" ] || [ -z "$(ls -A "${APP_DIR}")" ]; then
+        if [ ! -d "${APP_DIR}" ] || [ -z "$(ls -A "${APP_DIR}" 2>/dev/null)" ]; then
             echo "⚠️ /app is empty but commit record exists. Forcing main source update."
-            # 重新克隆（逻辑同上，为简化可调用自身？但直接重复代码更清晰）
-            SRC_TMP="/tmp/learnsite-src"
-            git clone --depth 1 "${REPO_URL}" "${SRC_TMP}"
-            find "${APP_DIR}" -mindepth 1 -not -path "${STATE_DIR}" -not -path "${STATE_DIR}/*" -delete 2>/dev/null || true
-            if [ -d "${SRC_TMP}/LearnSiteDev" ]; then
-                cp -r "${SRC_TMP}/LearnSiteDev/"* "${APP_DIR}/" 2>/dev/null || true
-                cp -r "${SRC_TMP}/LearnSiteDev/".[!.]* "${APP_DIR}/" 2>/dev/null || true
-            elif [ -d "${SRC_TMP}/src" ]; then
-                cp -r "${SRC_TMP}/src/"* "${APP_DIR}/" 2>/dev/null || true
-                cp -r "${SRC_TMP}/src/".[!.]* "${APP_DIR}/" 2>/dev/null || true
-            elif [ -d "${SRC_TMP}/Source" ]; then
-                cp -r "${SRC_TMP}/Source/"* "${APP_DIR}/" 2>/dev/null || true
-                cp -r "${SRC_TMP}/Source/".[!.]* "${APP_DIR}/" 2>/dev/null || true
-            else
-                cp -r "${SRC_TMP}/"* "${APP_DIR}/" 2>/dev/null || true
-                cp -r "${SRC_TMP}/".[!.]* "${APP_DIR}/" 2>/dev/null || true
+
+            # 同样备份状态目录
+            if [ -d "${STATE_DIR}" ]; then
+                cp -r "${STATE_DIR}" /tmp/state-backup
             fi
-            rm -rf "${SRC_TMP}"
+
+            rm -rf "${APP_DIR}"
+            git clone --depth 1 "${REPO_URL}" "${APP_DIR}"
+
+            if [ -d "/tmp/state-backup" ]; then
+                rm -rf "${STATE_DIR}" 2>/dev/null || true
+                mv /tmp/state-backup "${STATE_DIR}"
+            else
+                mkdir -p "${STATE_DIR}"
+            fi
+
             echo "${REMOTE_MAIN_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
+            echo "✓ Main source updated (forced clone)."
         fi
     fi
 
-    # 复制默认 web.config 模板到目标位置（覆盖源码中可能自带的 web.config）
+    # 复制默认 web.config 模板到目标位置（覆盖克隆下来的 web.config）
     if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
         echo "Copying default web.config template to ${TARGET_WEB_CONFIG}"
         cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
