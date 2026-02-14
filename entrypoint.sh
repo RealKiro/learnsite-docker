@@ -1,11 +1,17 @@
 #!/bin/bash
 set -e
 
-# ========== 配置区域 ==========
-# 主源码仓库地址（请根据您的实际仓库修改）
-REPO_URL="https://github.com/RealKiro/learnsite.git"
-# 备用下载链接，用于当仓库中缺少 learnsite.sql 时自动补全（请确保链接有效）
-BACKUP_SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
+# ========== 配置区域（请根据实际修改）==========
+# 主要仓库地址（GitHub）
+PRIMARY_REPO_URL="https://github.com/RealKiro/learnsite.git"
+# 备用仓库地址（Gitee，用于网络故障时切换）
+FALLBACK_REPO_URL="https://gitee.com/realiy/learnsite.git"
+
+# SQL 文件的主要下载链接（GitHub Raw）
+PRIMARY_SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
+# SQL 文件的备用下载链接（Gitee Raw）
+FALLBACK_SQL_URL="https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql"
+
 # 应用目录（容器内）
 APP_DIR="/app"
 # 持久化状态目录，用于存放上次构建的commit和标记文件（独立于源码，避免被覆盖）
@@ -18,18 +24,45 @@ MARKER_FILE="${APP_DIR}/.initialized"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
 # 镜像内的默认 web.config 模板（由 Dockerfile 复制）
 DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
-# ==============================
+# ==============================================
 
 echo "========================================="
-echo "Starting LearnSite dynamic setup (optimized)"
+echo "Starting LearnSite dynamic setup (with fallback repos and SQL)"
 echo "========================================="
 
-# 确保状态目录存在（后续会临时备份）
+# 确保状态目录存在
 mkdir -p "${STATE_DIR}"
 
-# 函数：获取远程主仓库最新 commit
+# 函数：获取远程主仓库最新 commit（注意：这里使用主仓库的地址，因为备用仓库可能不同步）
 get_remote_main_commit() {
-    git ls-remote "${REPO_URL}" HEAD | cut -f1
+    git ls-remote "${PRIMARY_REPO_URL}" HEAD | cut -f1
+}
+
+# 函数：尝试从给定 URL 克隆仓库，成功返回0，失败返回1
+clone_repo() {
+    local repo_url=$1
+    local target_dir=$2
+    echo "Attempting to clone from $repo_url ..."
+    if git clone --depth 1 "$repo_url" "$target_dir"; then
+        return 0
+    else
+        echo "Failed to clone from $repo_url"
+        return 1
+    fi
+}
+
+# 函数：尝试从给定 URL 下载 SQL 文件，成功返回0，失败返回1
+download_sql() {
+    local sql_url=$1
+    local output_file=$2
+    echo "Attempting to download SQL from $sql_url ..."
+    # 使用 curl 下载，-f 使失败时返回错误码，-sSL 静默但显示错误，-o 输出文件
+    if curl -f -sSL -o "$output_file" "$sql_url"; then
+        return 0
+    else
+        echo "Failed to download from $sql_url"
+        return 1
+    fi
 }
 
 # 检查是否为第一次运行（标记文件不存在）
@@ -40,7 +73,7 @@ if [ ! -f "${MARKER_FILE}" ]; then
     PREV_MAIN_COMMIT=""
     [ -f "${LAST_MAIN_COMMIT_FILE}" ] && PREV_MAIN_COMMIT=$(cat "${LAST_MAIN_COMMIT_FILE}")
 
-    # 获取远程最新 commit
+    # 获取远程最新 commit（仅用于判断是否需要更新）
     REMOTE_MAIN_COMMIT=$(get_remote_main_commit)
 
     # 判断是否需要更新主源码
@@ -57,16 +90,29 @@ if [ ! -f "${MARKER_FILE}" ]; then
 
     # 如果需要更新主源码
     if [ "${NEED_UPDATE_MAIN}" = true ]; then
-        echo "Updating main source from ${REPO_URL}..."
+        echo "Updating main source..."
 
         # 备份状态目录（避免被克隆覆盖）
         if [ -d "${STATE_DIR}" ]; then
             cp -r "${STATE_DIR}" /tmp/state-backup
         fi
 
-        # 直接克隆仓库到 /app（这会清空并替换 /app 下的所有内容）
-        rm -rf "${APP_DIR}"  # 先删除整个 /app 确保干净
-        git clone --depth 1 "${REPO_URL}" "${APP_DIR}"
+        # 清空目标目录
+        rm -rf "${APP_DIR}"
+
+        # 先尝试从主要仓库克隆
+        if clone_repo "${PRIMARY_REPO_URL}" "${APP_DIR}"; then
+            echo "✓ Successfully cloned from primary repository (GitHub)."
+        else
+            echo "⚠️ Primary clone failed, trying fallback repository..."
+            # 如果主要仓库失败，尝试备用仓库
+            if clone_repo "${FALLBACK_REPO_URL}" "${APP_DIR}"; then
+                echo "✓ Successfully cloned from fallback repository (Gitee)."
+            else
+                echo "❌ ERROR: Both primary and fallback repositories failed to clone."
+                exit 1
+            fi
+        fi
 
         # 恢复状态目录
         if [ -d "/tmp/state-backup" ]; then
@@ -76,7 +122,10 @@ if [ ! -f "${MARKER_FILE}" ]; then
             mkdir -p "${STATE_DIR}"
         fi
 
-        echo "✓ Main source cloned."
+        # 记录本次构建的 commit（从克隆后的本地仓库获取）
+        LOCAL_COMMIT=$(git --git-dir="${APP_DIR}/.git" rev-parse HEAD)
+        echo "${LOCAL_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
+        echo "✓ Main source updated (commit: ${LOCAL_COMMIT})."
     else
         # 如果主源码未更新，但 /app 可能为空（例如卷丢失），则强制更新
         if [ ! -d "${APP_DIR}" ] || [ -z "$(ls -A "${APP_DIR}" 2>/dev/null)" ]; then
@@ -88,7 +137,15 @@ if [ ! -f "${MARKER_FILE}" ]; then
             fi
 
             rm -rf "${APP_DIR}"
-            git clone --depth 1 "${REPO_URL}" "${APP_DIR}"
+
+            # 尝试主要仓库
+            if ! clone_repo "${PRIMARY_REPO_URL}" "${APP_DIR}"; then
+                echo "⚠️ Primary clone failed, trying fallback repository..."
+                if ! clone_repo "${FALLBACK_REPO_URL}" "${APP_DIR}"; then
+                    echo "❌ ERROR: Both primary and fallback repositories failed to clone."
+                    exit 1
+                fi
+            fi
 
             if [ -d "/tmp/state-backup" ]; then
                 rm -rf "${STATE_DIR}" 2>/dev/null || true
@@ -97,26 +154,34 @@ if [ ! -f "${MARKER_FILE}" ]; then
                 mkdir -p "${STATE_DIR}"
             fi
 
-            echo "✓ Main source forced cloned."
+            LOCAL_COMMIT=$(git --git-dir="${APP_DIR}/.git" rev-parse HEAD)
+            echo "${LOCAL_COMMIT}" > "${LAST_MAIN_COMMIT_FILE}"
+            echo "✓ Main source forced updated."
         fi
     fi
 
-    # ========== 确保 learnsite.sql 存在 ==========
+    # ========== 确保 learnsite.sql 存在（带故障转移下载）==========
     mkdir -p /app/sql
     if [ ! -f /app/sql/learnsite.sql ]; then
-        echo "⚠️ learnsite.sql not found in cloned source. Downloading from backup URL..."
-        # 使用 curl 下载备用文件，-f 使失败时返回错误码，-sSL 静默但显示错误
-        curl -f -sSL -o /app/sql/learnsite.sql "${BACKUP_SQL_URL}"
-        if [ $? -eq 0 ] && [ -f /app/sql/learnsite.sql ]; then
-            echo "✓ learnsite.sql downloaded successfully."
+        echo "⚠️ learnsite.sql not found in cloned source. Attempting to download..."
+
+        # 先尝试从主要 SQL 链接下载
+        if download_sql "${PRIMARY_SQL_URL}" /app/sql/learnsite.sql; then
+            echo "✓ learnsite.sql downloaded successfully from primary URL (GitHub)."
         else
-            echo "❌ Failed to download learnsite.sql. Database initialization may fail."
-            # 不退出，让后续步骤继续（可能已有其他文件）
+            echo "⚠️ Primary download failed, trying fallback SQL URL..."
+            # 如果主要链接失败，尝试备用链接
+            if download_sql "${FALLBACK_SQL_URL}" /app/sql/learnsite.sql; then
+                echo "✓ learnsite.sql downloaded successfully from fallback URL (Gitee)."
+            else
+                echo "❌ Failed to download learnsite.sql from both URLs. Database initialization may fail."
+                # 不退出，让后续步骤继续（可能已有其他文件或后续步骤会处理）
+            fi
         fi
     else
         echo "✓ learnsite.sql found in source."
     fi
-    # ===========================================
+    # ==========================================================
 
     # 复制默认 web.config 模板到目标位置（覆盖克隆下来的 web.config）
     if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
