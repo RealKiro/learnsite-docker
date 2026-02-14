@@ -2,18 +2,18 @@
 set -e
 
 # ========== 配置区域（可自定义）==========
-# 主要仓库地址（建议使用稳定的 Gitee）
-PRIMARY_REPO_URL="https://gitee.com/realiy/learnsite.git"
-# 备用仓库地址（GitHub）
-FALLBACK_REPO_URL="https://github.com/RealKiro/learnsite.git"
+# 主要仓库地址（GitHub，作为主开发源）
+PRIMARY_REPO_URL="https://github.com/RealKiro/learnsite.git"
+# 备用仓库地址（Gitee，用于网络故障时切换）
+FALLBACK_REPO_URL="https://gitee.com/realiy/learnsite.git"
 # 克隆重试次数
 CLONE_RETRIES=3
 # 重试间隔（秒）
 RETRY_INTERVAL=5
 
-# SQL 文件主要下载链接
+# SQL 文件主要下载链接（GitHub Raw）
 PRIMARY_SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
-# SQL 文件备用下载链接
+# SQL 文件备用下载链接（Gitee Raw）
 FALLBACK_SQL_URL="https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql"
 
 APP_DIR="/app"
@@ -89,21 +89,21 @@ if [ ! -f "${MARKER_FILE}" ]; then
         cp -r "${STATE_DIR}" /tmp/state-backup
     fi
 
-    # 执行带重试的克隆：先尝试主仓库，失败则尝试备用仓库
+    # 执行带重试的克隆：先尝试主仓库（GitHub），失败则尝试备用（Gitee）
     CLONE_SUCCESS=false
     if clone_with_retry "${PRIMARY_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
         CLONE_SUCCESS=true
-        echo "✓ Cloned from primary repository."
+        echo "✓ Cloned from primary repository (GitHub)."
     else
-        echo "⚠️ Primary repository failed after ${CLONE_RETRIES} attempts. Trying fallback repository..."
+        echo "⚠️ Primary repository (GitHub) failed after ${CLONE_RETRIES} attempts. Trying fallback repository (Gitee)..."
         if clone_with_retry "${FALLBACK_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
             CLONE_SUCCESS=true
-            echo "✓ Cloned from fallback repository."
+            echo "✓ Cloned from fallback repository (Gitee)."
         fi
     fi
 
     if [ "$CLONE_SUCCESS" = false ]; then
-        echo "❌ ERROR: Both primary and fallback repositories failed to clone after multiple attempts."
+        echo "❌ ERROR: Both primary (GitHub) and fallback (Gitee) repositories failed to clone after multiple attempts."
         echo "Container will exit. Please check network connectivity or repository URLs."
         exit 1
     fi
@@ -148,13 +148,13 @@ mkdir -p "${APP_DIR}/sql"
 if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
     echo "⚠️ learnsite.sql not found. Attempting to download..."
     if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${PRIMARY_SQL_URL}"; then
-        echo "✓ Downloaded from primary URL."
+        echo "✓ Downloaded from primary URL (GitHub)."
     else
-        echo "⚠️ Primary download failed, trying fallback..."
+        echo "⚠️ Primary download failed, trying fallback (Gitee)..."
         if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${FALLBACK_SQL_URL}"; then
-            echo "✓ Downloaded from fallback URL."
+            echo "✓ Downloaded from fallback URL (Gitee)."
         else
-            echo "❌ Failed to download learnsite.sql. Database init may fail."
+            echo "❌ Failed to download learnsite.sql from both URLs. Database init may fail."
         fi
     fi
 else
