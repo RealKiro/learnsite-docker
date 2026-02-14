@@ -1,20 +1,19 @@
 #!/bin/bash
 set -e
 
-# ========== 配置区域（可自定义）==========
-# 主要仓库地址（GitHub，作为主开发源）
-PRIMARY_REPO_URL="https://github.com/RealKiro/learnsite.git"
-# 备用仓库地址（Gitee，用于网络故障时切换）
-FALLBACK_REPO_URL="https://gitee.com/realiy/learnsite.git"
-# 克隆重试次数
-CLONE_RETRIES=3
-# 重试间隔（秒）
-RETRY_INTERVAL=5
+# ========== 可被环境变量覆盖的默认配置 ==========
+# 主要仓库地址（默认 GitHub）
+: "${PRIMARY_REPO_URL:=https://github.com/RealKiro/learnsite.git}"
+# 备用仓库地址（默认 Gitee）
+: "${FALLBACK_REPO_URL:=https://gitee.com/realiy/learnsite.git}"
+# SQL 文件主要下载链接（默认 GitHub Raw）
+: "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
+# SQL 文件备用下载链接（默认 Gitee Raw）
+: "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
 
-# SQL 文件主要下载链接（GitHub Raw）
-PRIMARY_SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
-# SQL 文件备用下载链接（Gitee Raw）
-FALLBACK_SQL_URL="https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql"
+# 克隆重试次数（也可通过环境变量覆盖）
+: "${CLONE_RETRIES:=3}"
+: "${RETRY_INTERVAL:=5}"
 
 APP_DIR="/app"
 STATE_DIR="${APP_DIR}/.state"
@@ -25,11 +24,13 @@ DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
 
 # 环境变量控制：是否每次启动都检查更新（默认 false）
 AUTO_UPDATE=${AUTO_UPDATE_SOURCE:-false}
-# ==========================================
+# ==============================================
 
 echo "========================================="
 echo "Starting LearnSite (runtime source fetch mode with retry)"
 echo "Auto update: $AUTO_UPDATE"
+echo "Primary repo: $PRIMARY_REPO_URL"
+echo "Fallback repo: $FALLBACK_REPO_URL"
 echo "========================================="
 
 mkdir -p "${STATE_DIR}"
@@ -58,7 +59,7 @@ clone_with_retry() {
     return 1
 }
 
-# 函数：拉取最新更新（git pull，也可添加重试）
+# 函数：拉取最新更新（git pull）
 update_repo() {
     cd "${APP_DIR}"
     if git pull --depth 1 origin; then
@@ -89,29 +90,31 @@ if [ ! -f "${MARKER_FILE}" ]; then
         cp -r "${STATE_DIR}" /tmp/state-backup
     fi
 
-    # 执行带重试的克隆：先尝试主仓库（GitHub），失败则尝试备用（Gitee）
+    # 执行带重试的克隆：先尝试主仓库，失败则尝试备用
     CLONE_SUCCESS=false
     if clone_with_retry "${PRIMARY_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
         CLONE_SUCCESS=true
-        echo "✓ Cloned from primary repository (GitHub)."
+        echo "✓ Cloned from primary repository."
     else
-        echo "⚠️ Primary repository (GitHub) failed after ${CLONE_RETRIES} attempts. Trying fallback repository (Gitee)..."
+        echo "⚠️ Primary repository failed after ${CLONE_RETRIES} attempts. Trying fallback repository..."
         if clone_with_retry "${FALLBACK_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
             CLONE_SUCCESS=true
-            echo "✓ Cloned from fallback repository (Gitee)."
+            echo "✓ Cloned from fallback repository."
         fi
     fi
 
     if [ "$CLONE_SUCCESS" = false ]; then
-        echo "❌ ERROR: Both primary (GitHub) and fallback (Gitee) repositories failed to clone after multiple attempts."
+        echo "❌ ERROR: Both primary and fallback repositories failed to clone after multiple attempts."
         echo "Container will exit. Please check network connectivity or repository URLs."
         exit 1
     fi
 
-    # 恢复状态目录
+    # 恢复状态目录（若无备份则创建）
     if [ -d "/tmp/state-backup" ]; then
         rm -rf "${STATE_DIR}" 2>/dev/null || true
         mv /tmp/state-backup "${STATE_DIR}"
+    else
+        mkdir -p "${STATE_DIR}"
     fi
 
     # 记录当前 commit
@@ -131,6 +134,7 @@ elif [ "${AUTO_UPDATE}" = "true" ]; then
         if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
             echo "New commits detected. Pulling..."
             update_repo
+            mkdir -p "${STATE_DIR}"
             git rev-parse HEAD > "${LAST_COMMIT_FILE}"
         else
             echo "✓ Repository already up-to-date."
@@ -148,11 +152,11 @@ mkdir -p "${APP_DIR}/sql"
 if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
     echo "⚠️ learnsite.sql not found. Attempting to download..."
     if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${PRIMARY_SQL_URL}"; then
-        echo "✓ Downloaded from primary URL (GitHub)."
+        echo "✓ Downloaded from primary URL."
     else
-        echo "⚠️ Primary download failed, trying fallback (Gitee)..."
+        echo "⚠️ Primary download failed, trying fallback..."
         if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${FALLBACK_SQL_URL}"; then
-            echo "✓ Downloaded from fallback URL (Gitee)."
+            echo "✓ Downloaded from fallback URL."
         else
             echo "❌ Failed to download learnsite.sql from both URLs. Database init may fail."
         fi
@@ -161,7 +165,7 @@ else
     echo "✓ learnsite.sql already exists."
 fi
 
-# ========== 应用自定义 web.config 模板（覆盖源码中的配置文件）==========
+# ========== 应用自定义 web.config 模板 ==========
 if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
     echo "Applying custom web.config template..."
     cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
