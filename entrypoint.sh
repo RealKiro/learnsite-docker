@@ -2,10 +2,15 @@
 set -e
 
 # ========== 配置区域（可自定义）==========
-# 主要仓库地址（GitHub）
-PRIMARY_REPO_URL="https://github.com/RealKiro/learnsite.git"
-# 备用仓库地址（Gitee）
-FALLBACK_REPO_URL="https://gitee.com/realiy/learnsite.git"
+# 主要仓库地址（建议使用稳定的 Gitee）
+PRIMARY_REPO_URL="https://gitee.com/realiy/learnsite.git"
+# 备用仓库地址（GitHub）
+FALLBACK_REPO_URL="https://github.com/RealKiro/learnsite.git"
+# 克隆重试次数
+CLONE_RETRIES=3
+# 重试间隔（秒）
+RETRY_INTERVAL=5
+
 # SQL 文件主要下载链接
 PRIMARY_SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
 # SQL 文件备用下载链接
@@ -23,26 +28,37 @@ AUTO_UPDATE=${AUTO_UPDATE_SOURCE:-false}
 # ==========================================
 
 echo "========================================="
-echo "Starting LearnSite (runtime source fetch mode)"
+echo "Starting LearnSite (runtime source fetch mode with retry)"
 echo "Auto update: $AUTO_UPDATE"
 echo "========================================="
 
 mkdir -p "${STATE_DIR}"
 
-# 函数：克隆仓库（支持主备切换）
-clone_repo() {
+# 函数：带重试的克隆操作
+clone_with_retry() {
     local repo_url=$1
     local target=$2
-    echo "Attempting to clone from $repo_url ..."
-    if git clone --depth 1 "$repo_url" "$target"; then
-        return 0
-    else
-        echo "Failed to clone from $repo_url"
-        return 1
-    fi
+    local retries=$3
+    local attempt=1
+    while [ $attempt -le $retries ]; do
+        echo "Attempt $attempt of $retries to clone from $repo_url ..."
+        if git clone --depth 1 "$repo_url" "$target"; then
+            echo "✓ Successfully cloned from $repo_url on attempt $attempt."
+            return 0
+        else
+            echo "⚠️ Clone attempt $attempt failed."
+            if [ $attempt -lt $retries ]; then
+                echo "Retrying in $RETRY_INTERVAL seconds..."
+                sleep $RETRY_INTERVAL
+            fi
+        fi
+        attempt=$((attempt + 1))
+    done
+    echo "❌ Failed to clone from $repo_url after $retries attempts."
+    return 1
 }
 
-# 函数：拉取最新更新（git pull）
+# 函数：拉取最新更新（git pull，也可添加重试）
 update_repo() {
     cd "${APP_DIR}"
     if git pull --depth 1 origin; then
@@ -64,29 +80,32 @@ update_repo() {
 if [ ! -f "${MARKER_FILE}" ]; then
     echo "🚀 First run (marker not found). Forcing clean clone regardless of existing files..."
 
-    # ===== 新增：强制清空 /app 目录内容（但保留挂载点）=====
-    # 无论目录是否为空，都先清空，确保后续克隆纯净
+    # 强制清空 /app 目录内容（但保留挂载点）
     echo "Cleaning up /app directory..."
     find "${APP_DIR}" -mindepth 1 -delete 2>/dev/null || true
-    # ==================================================
 
     # 备份状态目录（避免被克隆覆盖）
     if [ -d "${STATE_DIR}" ]; then
         cp -r "${STATE_DIR}" /tmp/state-backup
     fi
 
-    # 执行初始克隆
-    echo "📦 Performing initial clone..."
-    if clone_repo "${PRIMARY_REPO_URL}" "${APP_DIR}"; then
+    # 执行带重试的克隆：先尝试主仓库，失败则尝试备用仓库
+    CLONE_SUCCESS=false
+    if clone_with_retry "${PRIMARY_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
+        CLONE_SUCCESS=true
         echo "✓ Cloned from primary repository."
     else
-        echo "⚠️ Primary clone failed, trying fallback..."
-        if clone_repo "${FALLBACK_REPO_URL}" "${APP_DIR}"; then
+        echo "⚠️ Primary repository failed after ${CLONE_RETRIES} attempts. Trying fallback repository..."
+        if clone_with_retry "${FALLBACK_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
+            CLONE_SUCCESS=true
             echo "✓ Cloned from fallback repository."
-        else
-            echo "❌ ERROR: Both repositories failed to clone."
-            exit 1
         fi
+    fi
+
+    if [ "$CLONE_SUCCESS" = false ]; then
+        echo "❌ ERROR: Both primary and fallback repositories failed to clone after multiple attempts."
+        echo "Container will exit. Please check network connectivity or repository URLs."
+        exit 1
     fi
 
     # 恢复状态目录
@@ -99,7 +118,7 @@ if [ ! -f "${MARKER_FILE}" ]; then
     git --git-dir="${APP_DIR}/.git" rev-parse HEAD > "${LAST_COMMIT_FILE}"
     echo "✓ Initial source cloned."
 
-    # 创建标记文件
+    # 创建标记文件（仅在克隆成功后创建）
     touch "${MARKER_FILE}"
     echo "✓ Marker file created."
 
