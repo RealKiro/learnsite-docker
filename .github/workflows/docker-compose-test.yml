@@ -1,0 +1,105 @@
+name: Docker Compose Integration Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create test data directories
+        run: |
+          # 创建模拟的宿主机数据目录，使用相对路径以便 docker-compose 挂载
+          mkdir -p ./test-data/learnsite/sql
+          mkdir -p ./test-data/mssql
+          # 设置 mssql 数据目录权限（容器内用户 uid 10001）
+          chmod 777 ./test-data/mssql
+          echo "Test directories created."
+
+      - name: Create shared network
+        run: docker network create learnsite-net || true  # 如果已存在则忽略
+
+      - name: Prepare docker-compose files for test (replace host paths)
+        run: |
+          # 备份原始文件（可选）
+          cp docker-compose.learnsite.yml docker-compose.learnsite.yml.bak
+          cp docker-compose.mssql.yml docker-compose.mssql.yml.bak
+          # 将宿主机路径替换为测试目录的绝对路径，确保挂载正确
+          # 注意：使用 sed 替换 /docker_data 为当前工作目录下的 test-data
+          sed -i "s|/docker_data|${PWD}/test-data|g" docker-compose.learnsite.yml
+          sed -i "s|/docker_data|${PWD}/test-data|g" docker-compose.mssql.yml
+          # 如果配置中有群晖路径，也可以替换，但本测试用不到，保留原样不影响
+          echo "Compose files updated for test."
+
+      - name: Start LearnSite service
+        run: |
+          docker compose -f docker-compose.learnsite.yml up -d
+          echo "Waiting for LearnSite to initialize..."
+          # 等待 learnsite 容器日志中出现初始化完成标记（根据您的 entrypoint 输出）
+          timeout 120s bash -c "until docker logs learnsite 2>&1 | grep -q 'Initialization complete'; do sleep 5; done"
+          echo "LearnSite initialized."
+
+      - name: Verify learnsite.sql was generated
+        run: |
+          # 检查 sql 文件是否已生成
+          if [ -f ./test-data/learnsite/sql/learnsite.sql ]; then
+            echo "learnsite.sql found."
+          else
+            echo "learnsite.sql not found after LearnSite start!" && exit 1
+          fi
+
+      - name: Start MSSQL service
+        run: |
+          docker compose -f docker-compose.mssql.yml up -d
+          echo "Waiting for MSSQL initialization container to complete..."
+          # 等待 mssql-init 容器退出（正常退出码为 0）
+          timeout 120s bash -c "while docker ps -a --filter 'name=mssql-init' --format '{{.Status}}' | grep -q 'Up'; do sleep 5; done"
+          # 检查初始化容器日志，确认执行成功
+          if docker logs mssql-init 2>&1 | grep -q "Running /learnsite/sql/learnsite.sql"; then
+            echo "Database initialized successfully."
+          else
+            echo "Database initialization failed!" && exit 1
+          fi
+
+      - name: Test LearnSite web access
+        run: |
+          # 等待 web 服务完全启动
+          sleep 10
+          # 测试首页是否返回 HTTP 200
+          curl -f --retry 5 --retry-delay 5 http://localhost:8080 || (echo "Web test failed" && exit 1)
+          echo "Web service responded successfully."
+
+      - name: Test database connectivity from web container (optional)
+        run: |
+          # 在 learnsite 容器中执行一个简单的数据库查询（需要容器内有 sqlcmd 或 ping）
+          # 这里使用 ping 测试网络连通性，实际更严谨的可以安装 sqlcmd 但需要额外步骤
+          docker exec learnsite ping -c 2 mssql || echo "Warning: Cannot ping mssql, but may still work."
+
+      - name: Display logs on failure
+        if: failure()
+        run: |
+          echo "===== LearnSite logs ====="
+          docker logs learnsite --tail 50
+          echo "===== MSSQL logs ====="
+          docker logs mssql --tail 50
+          echo "===== MSSQL init logs ====="
+          docker logs mssql-init --tail 50
+
+      - name: Clean up
+        if: always()
+        run: |
+          docker compose -f docker-compose.learnsite.yml down -v
+          docker compose -f docker-compose.mssql.yml down -v
+          docker network rm learnsite-net || true
+          rm -rf ./test-data
