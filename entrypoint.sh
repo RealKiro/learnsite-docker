@@ -3,7 +3,7 @@ set -e
 
 # ========== 配置区域 ==========
 # 主源码仓库地址（请根据您的实际仓库修改）
-REPO_URL="https://github.com/RealKiro/learnsite-docker.git"
+REPO_URL="https://github.com/RealKiro/learnsite.git"
 # 应用目录（容器内）
 APP_DIR="/app"
 # 持久化状态目录，用于存放上次构建的commit和标记文件（独立于源码，避免被覆盖）
