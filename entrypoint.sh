@@ -61,58 +61,65 @@ update_repo() {
 }
 
 # 判断是否需要获取/更新源码
-if [ ! -f "${MARKER_FILE}" ] || [ "${AUTO_UPDATE}" = "true" ]; then
-    if [ ! -f "${MARKER_FILE}" ]; then
-        echo "🚀 First run (marker not found)."
-    else
-        echo "🔄 Auto update enabled. Checking for source updates..."
+if [ ! -f "${MARKER_FILE}" ]; then
+    echo "🚀 First run (marker not found). Forcing clean clone regardless of existing files..."
+
+    # ===== 新增：强制清空 /app 目录内容（但保留挂载点）=====
+    # 无论目录是否为空，都先清空，确保后续克隆纯净
+    echo "Cleaning up /app directory..."
+    find "${APP_DIR}" -mindepth 1 -delete 2>/dev/null || true
+    # ==================================================
+
+    # 备份状态目录（避免被克隆覆盖）
+    if [ -d "${STATE_DIR}" ]; then
+        cp -r "${STATE_DIR}" /tmp/state-backup
     fi
 
-    # 如果 /app 为空，则执行初始克隆
-    if [ -z "$(ls -A "${APP_DIR}" 2>/dev/null)" ]; then
-        echo "📦 /app is empty. Performing initial clone..."
-        # 清空可能残留的隐藏文件，但保留挂载点
-        find "${APP_DIR}" -mindepth 1 -delete 2>/dev/null || true
-        # 尝试主仓库
-        if clone_repo "${PRIMARY_REPO_URL}" "${APP_DIR}"; then
-            echo "✓ Cloned from primary repository."
-        else
-            echo "⚠️ Primary clone failed, trying fallback..."
-            if clone_repo "${FALLBACK_REPO_URL}" "${APP_DIR}"; then
-                echo "✓ Cloned from fallback repository."
-            else
-                echo "❌ ERROR: Both repositories failed to clone."
-                exit 1
-            fi
-        fi
-        # 记录当前 commit
-        git --git-dir="${APP_DIR}/.git" rev-parse HEAD > "${LAST_COMMIT_FILE}"
+    # 执行初始克隆
+    echo "📦 Performing initial clone..."
+    if clone_repo "${PRIMARY_REPO_URL}" "${APP_DIR}"; then
+        echo "✓ Cloned from primary repository."
     else
-        # /app 非空，检查是否是 git 仓库
-        if [ -d "${APP_DIR}/.git" ]; then
-            echo "📁 Existing Git repository found."
-            # 获取当前远程 commit
-            cd "${APP_DIR}"
-            LOCAL_COMMIT=$(git rev-parse HEAD)
-            # 获取远程最新 commit（从主仓库）
-            REMOTE_COMMIT=$(git ls-remote "${PRIMARY_REPO_URL}" HEAD | cut -f1)
-            if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
-                echo "New commits detected. Pulling..."
-                update_repo
-                # 更新后重新记录 commit
-                git rev-parse HEAD > "${LAST_COMMIT_FILE}"
-            else
-                echo "✓ Repository already up-to-date."
-            fi
-            cd - >/dev/null
+        echo "⚠️ Primary clone failed, trying fallback..."
+        if clone_repo "${FALLBACK_REPO_URL}" "${APP_DIR}"; then
+            echo "✓ Cloned from fallback repository."
         else
-            # 非 git 仓库，可能是用户手动放置的代码，跳过更新
-            echo "⚠️ /app is not a Git repository. Assuming user-provided code. Skipping source update."
+            echo "❌ ERROR: Both repositories failed to clone."
+            exit 1
         fi
     fi
 
-    # 创建标记文件（如果不存在）
+    # 恢复状态目录
+    if [ -d "/tmp/state-backup" ]; then
+        rm -rf "${STATE_DIR}" 2>/dev/null || true
+        mv /tmp/state-backup "${STATE_DIR}"
+    fi
+
+    # 记录当前 commit
+    git --git-dir="${APP_DIR}/.git" rev-parse HEAD > "${LAST_COMMIT_FILE}"
+    echo "✓ Initial source cloned."
+
+    # 创建标记文件
     touch "${MARKER_FILE}"
+    echo "✓ Marker file created."
+
+elif [ "${AUTO_UPDATE}" = "true" ]; then
+    echo "🔄 Auto update enabled. Checking for source updates..."
+    if [ -d "${APP_DIR}/.git" ]; then
+        cd "${APP_DIR}"
+        LOCAL_COMMIT=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(git ls-remote "${PRIMARY_REPO_URL}" HEAD | cut -f1)
+        if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+            echo "New commits detected. Pulling..."
+            update_repo
+            git rev-parse HEAD > "${LAST_COMMIT_FILE}"
+        else
+            echo "✓ Repository already up-to-date."
+        fi
+        cd - >/dev/null
+    else
+        echo "⚠️ /app is not a Git repository. Cannot auto-update. Skipping."
+    fi
 else
     echo "⏭️ Marker exists and auto update disabled. Skipping source update."
 fi
