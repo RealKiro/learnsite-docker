@@ -61,4 +61,4 @@ services:
 
 networks:
   learnsite-net:
-    external: true
+    driver: bridge
