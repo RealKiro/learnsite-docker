@@ -3,15 +3,24 @@ version: '3.8'
 services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2019-latest
-    container_name: mssql
+    container_name: mssql-ci
     environment:
       - ACCEPT_EULA=Y
+      # ↓↓↓ 必须修改为强密码，与 DB_PASSWORD 一致 ↓↓↓
       - MSSQL_SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
       - MSSQL_PID=Express
     ports:
+      # 宿主机端口映射，如需外部连接数据库可保留；如仅内部使用可删除
       - "1433:1433"
     volumes:
+      # 默认使用命名卷存储数据库文件，避免宿主机路径依赖
       - mssql_data:/var/opt/mssql
+      # 【可选】如需在 Linux 或群晖环境中使用绑定挂载（例如持久化数据），
+      # 可以注释上面的命名卷，改用以下挂载方式之一（取消注释并修改路径）：
+      # ---------- Linux 环境绑定挂载 ----------
+      # - /docker_data/mssql/data:/var/opt/mssql
+      # ---------- 群晖 NAS 环境绑定挂载 ----------
+      # - /volume1/docker/mssql/data:/var/opt/mssql
     networks:
       - learnsite-net
     healthcheck:
@@ -20,7 +29,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
-    restart: unless-stopped
+    restart: "no"
 
   mssql-init:
     image: mcr.microsoft.com/mssql-tools:latest
@@ -28,13 +37,15 @@ services:
       mssql:
         condition: service_healthy
     environment:
+      # ↓↓↓ 必须与 MSSQL_SA_PASSWORD 一致 ↓↓↓
       - SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
     networks:
       - learnsite-net
     command: >
       /bin/bash -c "
+      # SQL 文件下载地址（请确认该链接可公开访问）
       SQL_URL='https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql'
-      echo 'Downloading learnsite.sql...'
+      echo 'Downloading learnsite.sql from $SQL_URL...'
       curl -f -sSL -o /tmp/learnsite.sql \$SQL_URL || { echo 'Download failed'; exit 1; }
       echo 'Executing SQL script...'
       /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P \"\$$SA_PASSWORD\" -i /tmp/learnsite.sql

@@ -2,24 +2,37 @@ version: '3.8'
 
 services:
   web:
-    build:
-      context: .
-      args:
-        UPDATE_SOURCE: 1        # CI 中通常希望拉取最新源码，可设为 1
-    container_name: learnsite
+    # 【CI 测试使用的镜像】可根据需要修改为 dev 标签或刚刚构建的镜像
+    # 例如：orzg/learnsite-web:dev  （用于测试开发版）
+    #       orzg/learnsite-web:latest （用于测试最新稳定版）
+    image: orzg/learnsite-web:latest
+    container_name: learnsite-ci
     ports:
+      # 宿主机端口映射，如果 8080 被占用可改为其他，例如 "8081:8080"
       - "8080:8080"
     volumes:
-      - learnsite_data:/app      # CI 中使用命名卷，避免宿主机路径
+      # CI 中默认使用命名卷，避免宿主机路径依赖
+      - learnsite_data:/app
+      # 【可选】如需在 Linux 或群晖环境中使用绑定挂载（例如调试时查看生成的文件），
+      # 可以注释上面的命名卷，改用以下挂载方式之一（取消注释并修改路径）：
+      # ---------- Linux 环境绑定挂载 ----------
+      # - /docker_data/learnsite/app:/app
+      # ---------- 群晖 NAS 环境绑定挂载 ----------
+      # - /volume1/docker/learnsite/app:/app
     environment:
       - MONO_IOMAP=all
+      # 数据库主机名（必须与 mssql 容器名一致）
       - DB_HOST=mssql
+      # 数据库名称（可自定义，但需与初始化脚本一致）
       - DB_NAME=learnsite
+      # 数据库用户名（一般不变）
       - DB_USER=sa
+      # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
     networks:
       - learnsite-net
-    restart: always
+    # CI 环境中通常不需要重启策略，可设为 "no"
+    restart: "no"
 
 volumes:
   learnsite_data:
