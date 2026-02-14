@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  web:
+    image: orzg/learnsite-web:latest          # 如需自定义镜像，修改此处
+    container_name: learnsite
+    ports:
+      - "8080:8080"                           # 宿主机端口，如果被占用可改为其他
+    volumes:
+      # 根据你的环境选择以下一种挂载方式（取消注释，注释掉另一种）
+      # ---------- Linux 环境（Debian/Ubuntu）----------
+      - /docker_data/learnsite:/app
+      # ---------- 群晖 NAS 环境 ----------
+      # - /volume1/docker/learnsite:/app
+      # 可选：如需挂载自定义 web.config，取消下面注释
+      # - ./my-custom-web.config:/app/web.config
+    environment:
+      - MONO_IOMAP=all
+      - DB_HOST=mssql
+      - DB_NAME=learnsite
+      - DB_USER=sa
+      # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
+      - DB_PASSWORD=LearnSite!2025StrongPwd   # 【必须修改】
+    networks:
+      - learnsite-net
+    restart: always
+
+networks:
+  learnsite-net:
+    external: true
