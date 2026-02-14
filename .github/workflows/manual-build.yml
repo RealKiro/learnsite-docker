@@ -1,0 +1,52 @@
+name: Manual Build LearnSite (Dev/Latest)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version type to build'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - latest
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout own repo (custom configs)
+        uses: actions/checkout@v4
+        with:
+          path: my-repo
+
+      - name: Clone source from GitHub
+        run: |
+          git clone --depth 1 https://github.com/RealKiro/learnsite.git app-source
+          # 如果需要指定分支，可以添加 --branch main，但默认就是主分支
+
+      - name: Replace with custom configs
+        run: |
+          cp my-repo/web.config app-source/ 2>/dev/null || echo "Warning: web.config not found"
+          cp my-repo/Dockerfile app-source/ 2>/dev/null || echo "Warning: Dockerfile not found"
+          cp my-repo/entrypoint.sh app-source/ 2>/dev/null || echo "Warning: entrypoint.sh not found"
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app-source
+          file: ./app-source/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/learnsite-web:${{ github.event.inputs.version_type }}
+            ${{ secrets.DOCKER_USERNAME }}/learnsite-web:${{ github.event.inputs.version_type }}-${{ github.run_number }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
