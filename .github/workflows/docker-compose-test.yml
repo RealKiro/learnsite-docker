@@ -5,7 +5,7 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   test:
@@ -18,51 +18,36 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Create test data directories
-        run: |
-          mkdir -p ./test-data/learnsite/sql
-          mkdir -p ./test-data/mssql
-          # 设置 mssql 数据目录权限（容器内用户 uid 10001）
-          sudo chown -R 10001:10001 ./test-data/mssql || true  # 如果无 sudo 则用 777
-          chmod 777 ./test-data/mssql
-          echo "Test directories created."
-
       - name: Create shared network
+        # 创建外部网络，如果已存在则忽略错误
         run: docker network create learnsite-net || true
 
-      - name: Prepare docker-compose files for test
-        run: |
-          # 将宿主机路径替换为测试目录的绝对路径
-          sed -i "s|/docker_data|${PWD}/test-data|g" docker-compose.learnsite.yml
-          sed -i "s|/docker_data|${PWD}/test-data|g" docker-compose.mssql.yml
-          echo "Compose files updated for test."
-
+      # 无需创建数据目录，直接启动 LearnSite
       - name: Start LearnSite service
         run: |
           docker compose -f docker-compose.learnsite.yml up -d
           echo "Waiting for LearnSite to initialize..."
-          # 根据您的 entrypoint.sh 输出调整关键字
+          # 等待 LearnSite 容器日志中出现初始化完成标记
+          # 【请根据您的 entrypoint.sh 实际输出调整下方关键字】
           timeout 120s bash -c "until docker logs learnsite 2>&1 | grep -q 'Initialization complete'; do sleep 5; done"
           echo "LearnSite initialized."
 
-      - name: Verify learnsite.sql was generated
+      # 验证 sql 脚本是否已生成到共享卷中
+      - name: Verify learnsite.sql exists in volume
         run: |
-          if [ -f ./test-data/learnsite/sql/learnsite.sql ]; then
-            echo "learnsite.sql found."
-          else
-            echo "learnsite.sql not found after LearnSite start!" && exit 1
-          fi
+          # 使用临时 alpine 容器挂载 learnsite_data 卷，检查文件是否存在
+          docker run --rm -v learnsite_data:/data alpine sh -c "[ -f /data/sql/learnsite.sql ] && echo 'File exists' || exit 1"
+          echo "✓ learnsite.sql is present in learnsite_data volume."
 
-      # 分步启动 MSSQL 服务，先启动 mssql 容器
+      # 先启动 MSSQL 服务器，等待健康
       - name: Start MSSQL server only
         run: |
           docker compose -f docker-compose.mssql.yml up -d mssql
           echo "Waiting for MSSQL to become healthy..."
-          # 等待健康状态，最多 90 秒
           timeout 90s bash -c "while [ \"$(docker inspect --format='{{.State.Health.Status}}' mssql)\" != \"healthy\" ]; do sleep 3; done"
           echo "MSSQL is healthy."
 
-      # 如果健康检查失败，输出日志并退出
+      # 如果健康检查失败，输出日志以便调试
       - name: Check MSSQL health and logs
         if: failure() || always()
         run: |
@@ -75,20 +60,23 @@ jobs:
         run: |
           docker compose -f docker-compose.mssql.yml up -d mssql-init
           echo "Waiting for mssql-init to complete..."
+          # 等待初始化容器退出（状态变为 Exited）
           timeout 60s bash -c "while docker ps -a --filter 'name=mssql-init' --format '{{.Status}}' | grep -q 'Up'; do sleep 2; done"
-          # 检查初始化容器日志，确认执行成功
+          # 检查初始化容器日志是否包含成功执行信息
           if docker logs mssql-init 2>&1 | grep -q "Running /learnsite/sql/learnsite.sql"; then
             echo "Database initialized successfully."
           else
             echo "Database initialization failed!" && exit 1
           fi
 
+      # 测试 LearnSite Web 访问
       - name: Test LearnSite web access
         run: |
           sleep 5
           curl -f --retry 5 --retry-delay 5 http://localhost:8080 || (echo "Web test failed" && exit 1)
-          echo "Web service responded successfully."
+          echo "✓ Web service responded successfully."
 
+      # 如果失败，输出所有相关容器的日志
       - name: Display logs on failure
         if: failure()
         run: |
@@ -99,10 +87,12 @@ jobs:
           echo "===== MSSQL init logs ====="
           docker logs mssql-init --tail 50
 
+      # 清理所有资源
       - name: Clean up
         if: always()
         run: |
           docker compose -f docker-compose.learnsite.yml down -v
           docker compose -f docker-compose.mssql.yml down -v
           docker network rm learnsite-net || true
-          rm -rf ./test-data
+          # 可选：删除卷（注释掉以保留数据用于调试）
+          # docker volume rm learnsite_data mssql_data || true

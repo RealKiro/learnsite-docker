@@ -2,22 +2,24 @@ version: '3.8'
 
 services:
   web:
-    image: orzg/learnsite-web:latest          # 如需自定义镜像，修改此处
+    # 镜像名称，如需使用自己的镜像请修改此处
+    image: orzg/learnsite-web:latest
     container_name: learnsite
     ports:
-      - "8080:8080"                           # 宿主机端口，如果被占用可改为其他
+      # 宿主机端口映射，如果 8080 被占用可改为其他，例如 "8081:8080"
+      - "8080:8080"
     volumes:
-      # 根据你的环境选择以下一种挂载方式（取消注释，注释掉另一种）
-      # ---------- Linux 环境（Debian/Ubuntu）----------
-      - /docker_data/learnsite:/app
-      # ---------- 群晖 NAS 环境 ----------
-      # - /volume1/docker/learnsite:/app
+      # 使用命名卷持久化源码和状态，Docker 自动管理权限
+      - learnsite_data:/app
       # 可选：如需挂载自定义 web.config，取消下面注释
       # - ./my-custom-web.config:/app/web.config
     environment:
       - MONO_IOMAP=all
+      # 数据库主机名（必须与 mssql 容器名一致）
       - DB_HOST=mssql
+      # 数据库名称（可自定义，但需与初始化脚本一致）
       - DB_NAME=learnsite
+      # 数据库用户名（一般不变）
       - DB_USER=sa
       # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=LearnSite!2025StrongPwd   # 【必须修改】
@@ -25,6 +27,11 @@ services:
       - learnsite-net
     restart: always
 
+# 定义命名卷，Docker 会自动创建
+volumes:
+  learnsite_data:
+
+# 使用外部网络，需预先创建：docker network create learnsite-net
 networks:
   learnsite-net:
     external: true
