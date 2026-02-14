@@ -6,14 +6,11 @@ services:
     container_name: mssql
     environment:
       - ACCEPT_EULA=Y
-      # ↓↓↓ 必须修改为强密码，与 DB_PASSWORD 一致 ↓↓↓
       - MSSQL_SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
       - MSSQL_PID=Express
     ports:
-      # 宿主机端口映射，如需外部连接数据库可保留；如仅内部使用可删除
       - "1433:1433"
     volumes:
-      # 【重要】根据操作系统选择以下一种挂载方式（取消注释，注释掉另一种）
       # ---------- Linux 环境 ----------
       - /docker_data/mssql/data:/var/opt/mssql
       # ---------- 群晖 NAS 环境 ----------
@@ -21,7 +18,6 @@ services:
     networks:
       - learnsite-net
     healthcheck:
-      # 使用环境变量引用密码，避免硬编码
       test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"
       interval: 10s
       timeout: 5s
@@ -35,11 +31,8 @@ services:
       mssql:
         condition: service_healthy
     environment:
-      # ↓↓↓ 必须与 MSSQL_SA_PASSWORD 一致 ↓↓↓
       - SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
     volumes:
-      # 【重要】根据操作系统选择以下一种挂载方式（取消注释，注释掉另一种）
-      # 挂载 learnsite 的 app 目录，以便读取 sql 脚本
       # ---------- Linux 环境 ----------
       - /docker_data/learnsite/app:/learnsite
       # ---------- 群晖 NAS 环境 ----------

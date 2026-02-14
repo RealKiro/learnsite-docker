@@ -2,39 +2,33 @@ version: '3.8'
 
 services:
   web:
-    # 使用预构建的 LearnSite 镜像（由 CI 自动推送）
-    # 【注意】如需使用其他标签，请修改为对应版本，例如 orzg/learnsite-web:dev
+    # 使用您通过 CI 推送的镜像（可切换标签）
     image: orzg/learnsite-web:latest
     container_name: learnsite
     ports:
-      # 宿主机端口映射，如果 8080 被占用可改为其他，例如 "8081:8080"
       - "8080:8080"
     volumes:
-      # 【重要】根据操作系统选择以下一种挂载方式（取消注释，注释掉另一种）
+      # 【重要】根据操作系统选择挂载路径（取消注释对应行）
+      # 此目录用于持久化源码和状态，首次运行时会被填充
       # ---------- Linux 环境 ----------
       - /docker_data/learnsite/app:/app
       # ---------- 群晖 NAS 环境 ----------
       # - /volume1/docker/learnsite/app:/app
-      # 可选：如需挂载自定义 web.config，可单独挂载文件
-      # - /docker_data/learnsite/my-web.config:/app/web.config   # Linux
-      # - /volume1/docker/learnsite/my-web.config:/app/web.config # 群晖
+      # 可选：如需单独挂载自定义 web.config（不推荐，已由镜像内模板覆盖）
+      # - /docker_data/learnsite/my-web.config:/app/web.config
     environment:
       - MONO_IOMAP=all
-      # 数据库主机名（必须与 mssql 容器名一致，若分开部署需确保网络互通）
       - DB_HOST=mssql
-      # 数据库名称（可自定义，但需与初始化脚本一致）
       - DB_NAME=learnsite
-      # 数据库用户名（一般不变）
       - DB_USER=sa
       # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      # 源码更新控制：true=每次启动都拉取最新，false=仅首次拉取
+      - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
     restart: always
 
 networks:
   learnsite-net:
-    # 使用 bridge 驱动，Docker 会自动创建该网络
-    # 注意：如果两个服务分开部署，此网络不会与 mssql 的网络互通
-    # 建议将两个服务合并到一个 compose 文件中，或使用外部网络并手动创建
     driver: bridge

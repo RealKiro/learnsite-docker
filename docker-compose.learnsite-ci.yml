@@ -11,7 +11,8 @@ services:
       # 宿主机端口映射，如果 8080 被占用可改为其他，例如 "8081:8080"
       - "8080:8080"
     volumes:
-      # CI 中默认使用命名卷，避免宿主机路径依赖
+      # CI 中使用命名卷，避免宿主机路径依赖
+      # 该卷初始为空，容器启动时会由 entrypoint 自动从 Git 拉取源码
       - learnsite_data:/app
       # 【可选】如需在 Linux 或群晖环境中使用绑定挂载（例如调试时查看生成的文件），
       # 可以注释上面的命名卷，改用以下挂载方式之一（取消注释并修改路径）：
@@ -29,6 +30,8 @@ services:
       - DB_USER=sa
       # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      # 源码更新控制：true=每次启动都拉取最新，false=仅首次拉取
+      - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
     # CI 环境中通常不需要重启策略，可设为 "no"
