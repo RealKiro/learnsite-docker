@@ -1,0 +1,23 @@
+version: '3.8'
+services:
+  web:
+    image: orzg/learnsite-web:latest   # 或使用 build: .
+    container_name: learnsite
+    ports:
+      - "8080:8080"
+    volumes:
+      - learnsite_data:/app            # 使用命名卷，无需宿主机路径
+    environment:
+      - MONO_IOMAP=all
+      - DB_HOST=mssql
+      - DB_NAME=learnsite
+      - DB_USER=sa
+      - DB_PASSWORD=LearnSite!2025StrongPwd
+    networks:
+      - learnsite-net
+    restart: always
+volumes:
+  learnsite_data:
+networks:
+  learnsite-net:
+    external: true
