@@ -18,6 +18,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # 赋予入口脚本执行权限
+      - name: Set execute permission on entrypoint script
+        run: chmod +x entrypoint.ci.sh
+
       # 启动所有服务，通过环境变量传递密码
       - name: Start services
         run: |
