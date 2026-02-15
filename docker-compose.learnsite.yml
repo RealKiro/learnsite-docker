@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  learnsite:
+    image: orzg/learnsite-web:latest
+    container_name: learnsite
+
+    # 【网络模式】默认使用 host 模式，容器与宿主机共享网络。
+    # 如果您希望使用 bridge 模式，请注释掉下面这行，并取消下面 ports 和 networks 的注释。
+    network_mode: host
+
+    # 如果使用 bridge 模式，请取消下面三行的注释，并根据需要修改端口。
+    # ports:
+    #   - "8080:8080"   # 如果端口冲突，可修改左侧端口，如 9000:8080
+    # networks:
+    #   - learnsite-net
+
+    volumes:
+      # 数据持久化：使用相对路径，所有数据保存在当前目录的 app 子目录中
+      - ./app:/app
+
+    environment:
+      - MONO_IOMAP=all
+      # 数据库主机地址：
+      #   - 使用 host 模式时，通常可设为 localhost 或 172.17.0.1（Docker 默认网关）
+      #   - 使用 bridge 模式时，应设为 mssql（服务名）
+      # 此处默认设为 172.17.0.1，如果无法连接请根据实际情况修改（例如改为 localhost 或宿主机 IP）
+      - DB_HOST=172.17.0.1
+      - DB_NAME=learnsite
+      - DB_USER=sa
+      # ↓↓↓ 【必须修改】请设置与 mssql 服务相同的强密码（至少8位，含大小写字母、数字和特殊字符）↓↓↓
+      - DB_PASSWORD=YourStrong!Password123
+      - AUTO_UPDATE_SOURCE=false
+      # 源码仓库地址（可选，如不设置则使用镜像内的默认值）
+      - PRIMARY_REPO_URL=https://gitee.com/realiy/learnsite.git
+      - FALLBACK_REPO_URL=https://github.com/RealKiro/learnsite.git
+    restart: unless-stopped
+
+# 如果使用 bridge 模式，需要定义网络（请取消下面注释）
+# networks:
+#   learnsite-net:
+#     driver: bridge

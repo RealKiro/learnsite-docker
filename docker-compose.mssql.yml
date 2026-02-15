@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  mssql:
+    image: orzg/mssql-learnsite:latest
+    container_name: mssql
+
+    # 【网络模式】必须与 learnsite 保持一致，默认使用 host 模式。
+    network_mode: host
+
+    # 如果使用 bridge 模式，请取消下面三行的注释，并根据需要修改端口。
+    # ports:
+    #   - "1433:1433"
+    # networks:
+    #   - learnsite-net
+
+    volumes:
+      # 数据库文件持久化：使用相对路径，所有数据保存在当前目录的 data 子目录中
+      - ./data:/var/opt/mssql
+
+    environment:
+      - ACCEPT_EULA=Y
+      # ↓↓↓ 【必须修改】请设置与 learnsite 中 DB_PASSWORD 相同的强密码 ↓↓↓
+      - MSSQL_SA_PASSWORD=YourStrong!Password123
+      - MSSQL_PID=Express   # 可选：Developer、Standard 等
+      # SQL 文件下载地址（可选，如不设置则使用镜像内的默认值）
+      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
+      - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
+    restart: unless-stopped
+
+# 如果使用 bridge 模式，需要定义网络（请取消下面注释）
+# networks:
+#   learnsite-net:
+#     driver: bridge
