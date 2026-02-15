@@ -18,12 +18,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 创建 sql 目录并下载 learnsite.sql 文件
-      - name: Download SQL file
+      # 确保 sql 目录存在并包含 learnsite.sql（如果仓库中没有，需要先准备）
+      - name: Prepare SQL file
         run: |
           mkdir -p sql
-          curl -f -sSL -o sql/learnsite.sql "https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
-          echo "SQL file downloaded."
+          # 如果仓库中没有 sql/learnsite.sql，可以下载或从某处复制
+          # 例如从 GitHub 下载：
+          curl -o sql/learnsite.sql https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
 
       # 启动服务，通过环境变量传递密码
       - name: Start services
@@ -35,17 +36,15 @@ jobs:
       - name: List containers
         run: docker ps -a
 
-      # 等待 mssql 健康（确保数据库初始化完成）
-      - name: Wait for mssql to be healthy
+      # 等待 learnsite 服务就绪（可选，因为 depends_on 已确保 mssql 健康）
+      - name: Wait for learnsite to be ready
         run: |
-          echo "Waiting for mssql-ci to become healthy..."
-          timeout 90s bash -c "while [ \"\$(docker inspect --format='{{.State.Health.Status}}' mssql-ci 2>/dev/null)\" != \"healthy\" ]; do sleep 2; done"
-          echo "✅ mssql is healthy."
+          echo "Waiting for learnsite to start..."
+          timeout 60s bash -c "until curl -s http://localhost:8080 > /dev/null; do sleep 2; done"
+          echo "✅ learnsite is ready."
 
-      # 等待 learnsite 服务就绪（可选的额外等待）
-      - name: Wait for web service
+      - name: Test web service
         run: |
-          sleep 10
           curl -f --retry 5 --retry-delay 5 http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
           echo "✅ Web service responded successfully."
 
