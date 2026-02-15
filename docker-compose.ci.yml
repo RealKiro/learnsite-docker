@@ -54,27 +54,28 @@ services:
       - DB_HOST=mssql
     networks:
       - learnsite-net
-    command: 
+    command:
       - /bin/bash
       - -c
       - |
-        SQL_URL='https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql'
+        # 直接硬编码 URL，避免变量问题
+        SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
         echo "Downloading learnsite.sql from $SQL_URL..."
-        curl -f -sSL -o /tmp/learnsite.sql "$SQL_URL" || { echo 'Download failed'; exit 1; }
+        curl -f -sSL -o /tmp/learnsite.sql "$SQL_URL" || { echo "Download failed"; exit 1; }
         echo "Download complete. Waiting for SQL Server to be ready..."
         # 循环尝试连接数据库，最多尝试 30 次，每次间隔 2 秒
         for i in {1..30}; do
           /opt/mssql-tools/bin/sqlcmd -S "${DB_HOST}" -U sa -P "${SA_PASSWORD}" -Q "SELECT 1" > /dev/null 2>&1
           if [ $? -eq 0 ]; then
-            echo 'SQL Server is ready.'
+            echo "SQL Server is ready."
             break
           fi
           echo "Attempt $i: Waiting for SQL Server..."
           sleep 2
         done
-        echo 'Executing SQL script...'
+        echo "Executing SQL script..."
         /opt/mssql-tools/bin/sqlcmd -S "${DB_HOST}" -U sa -P "${SA_PASSWORD}" -i /tmp/learnsite.sql
-        echo 'Database initialization completed.'
+        echo "Database initialization completed."
     restart: "no"
 
 volumes:
