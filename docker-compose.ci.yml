@@ -1,49 +1,14 @@
-version: '3.8'
-
-services:
-  # SQL Server 数据库服务（CI 测试版）
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2025-latest
-    container_name: mssql-ci
-    entrypoint: /entrypoint.ci.sh            # 使用自定义入口脚本
-    environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=Developer
-    ports:
-      - "1433:1433"
-    volumes:
-      - mssql_data:/var/opt/mssql            # 持久化数据库文件
-      - ./entrypoint.ci.sh:/entrypoint.ci.sh:ro   # 挂载自定义入口脚本
-    networks:
-      - learnsite-net
-    restart: "no"
-
-  # LearnSite Web 服务（CI 测试版）
-  learnsite:
-    image: orzg/learnsite-web:latest
-    container_name: learnsite-ci
-    ports:
-      - "8080:8080"
-    volumes:
-      - learnsite_data:/app
-    environment:
-      - MONO_IOMAP=all
-      - DB_HOST=mssql
-      - DB_NAME=learnsite
-      - DB_USER=sa
-      - DB_PASSWORD=${DB_PASSWORD}
-      - AUTO_UPDATE_SOURCE=false
-    networks:
-      - learnsite-net
-    restart: "no"
-    depends_on:
-      - mssql   # 仅等待 mssql 容器启动，其内部初始化由入口脚本处理
-
-volumes:
-  learnsite_data:
-  mssql_data:
-
-networks:
-  learnsite-net:
-    driver: bridge
+mssql:
+  image: mcr.microsoft.com/mssql/server:2025-latest
+  container_name: mssql-ci
+  entrypoint: /entrypoint.ci.sh
+  environment:
+    - ACCEPT_EULA=Y
+    - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+    - MSSQL_PID=Developer
+  ports:
+    - "1433:1433"
+  volumes:
+    - mssql_data:/var/opt/mssql
+    - ./entrypoint.ci.sh:/entrypoint.ci.sh:ro
+  restart: "no"
