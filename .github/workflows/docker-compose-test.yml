@@ -32,7 +32,7 @@ jobs:
       - name: List containers
         run: docker ps -a
 
-      # 短暂等待后无条件输出 MSSQL 容器日志（无论运行与否）
+      # 短暂等待后无条件输出 MSSQL 容器日志（便于调试）
       - name: Debug MSSQL logs (early)
         run: |
           echo "⏳ Waiting 10 seconds for container to stabilize..."
