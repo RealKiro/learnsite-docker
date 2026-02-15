@@ -18,12 +18,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 直接设置环境变量并启动服务
+      # 直接启动服务，通过环境变量传递密码
       - name: Start services
         run: |
-          export MSSQL_SA_PASSWORD="${{ secrets.DB_PASSWORD }}"
-          export SA_PASSWORD="${{ secrets.DB_PASSWORD }}"
-          export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
+          MSSQL_SA_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+          SA_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+          DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
           docker compose -f docker-compose.ci.yml up -d
 
       - name: List containers
