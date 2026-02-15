@@ -1,6 +1,29 @@
 version: '3.8'
 
 services:
+  # SQL Server 数据库服务
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql-ci
+    environment:
+      - ACCEPT_EULA=Y
+      # SA 密码从环境变量读取（需与 DB_PASSWORD 一致）
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - learnsite-net
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: "no"
+
   # LearnSite Web 服务
   learnsite:
     image: orzg/learnsite-web:latest
@@ -14,35 +37,15 @@ services:
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
+      # 数据库密码从环境变量读取
       - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
     restart: "no"
-
-  # SQL Server 数据库服务
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2019-latest
-    container_name: mssql-ci
-    environment:
-      - ACCEPT_EULA=Y
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=Express
-    ports:
-      - "1433:1433"
-    volumes:
-      - mssql_data:/var/opt/mssql
-      # 挂载 learnsite 的数据卷，以便读取 SQL 文件
-      - learnsite_data:/learnsite:ro
-    networks:
-      - learnsite-net
-    healthcheck:
-      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: "no"
+    depends_on:
+      mssql:
+        condition: service_healthy   # 等待数据库健康后再启动
 
 volumes:
   learnsite_data:
