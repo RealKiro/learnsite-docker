@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  # LearnSite Web 服务（CI 测试版）
+  learnsite:
+    image: orzg/learnsite-web:latest
+    container_name: learnsite-ci
+    ports:
+      - "8080:8080"
+    volumes:
+      - learnsite_data:/app
+    environment:
+      - MONO_IOMAP=all
+      - DB_HOST=mssql
+      - DB_NAME=learnsite
+      - DB_USER=sa
+      # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 一致 ↓↓↓
+      - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      - AUTO_UPDATE_SOURCE=false
+    networks:
+      - learnsite-net
+    restart: "no"
+    depends_on:
+      mssql-init:
+        condition: service_completed_successfully
+
+  # SQL Server 数据库服务（CI 测试版）
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql-ci
+    environment:
+      - ACCEPT_EULA=Y
+      # ↓↓↓ 必须修改为强密码，与 DB_PASSWORD 一致 ↓↓↓
+      - MSSQL_SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql
+    networks:
+      - learnsite-net
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: "no"
+
+  # 数据库初始化服务（CI 中直接从 URL 下载 SQL 文件）
+  mssql-init:
+    image: mcr.microsoft.com/mssql-tools:latest
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      # ↓↓↓ 必须与 MSSQL_SA_PASSWORD 一致 ↓↓↓
+      - SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      # 数据库主机地址（默认为服务名 mssql，如果连不上可改为 172.17.0.1 或宿主机 IP）
+      - DB_HOST=mssql
+    networks:
+      - learnsite-net
+    command: >
+      /bin/bash -c "
+      SQL_URL='https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql'
+      echo 'Downloading learnsite.sql from $SQL_URL...'
+      curl -f -sSL -o /tmp/learnsite.sql \$SQL_URL || { echo 'Download failed'; exit 1; }
+      echo 'Executing SQL script...'
+      /opt/mssql-tools/bin/sqlcmd -S $${DB_HOST} -U sa -P \"$$SA_PASSWORD\" -i /tmp/learnsite.sql
+      echo 'Database initialization completed.'
+      "
+    restart: "no"
+
+volumes:
+  learnsite_data:
+  mssql_data:
+
+networks:
+  learnsite-net:
+    driver: bridge

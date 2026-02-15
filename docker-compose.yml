@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # LearnSite Web 服务
+  learnsite:
+    image: orzg/learnsite-web:latest
+    container_name: learnsite
+    ports:
+      - "8080:8080"
+    volumes:
+      # 【重要】挂载方式（默认使用相对路径，如需绝对路径请取消注释对应行）
+      # 默认相对路径（与 docker-compose.yml 同级的 app 目录）
+      - ./app:/app
+      # ---------- Linux 环境绝对路径 ----------
+      # - /docker_data/learnsite/app:/app
+      # ---------- 群晖 NAS 环境绝对路径 ----------
+      # - /volume1/docker/learnsite/app:/app
+    environment:
+      - MONO_IOMAP=all
+      - DB_HOST=mssql                     # 数据库服务名（必须与 mssql 容器名一致）
+      - DB_NAME=learnsite
+      - DB_USER=sa
+      # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
+      - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      - AUTO_UPDATE_SOURCE=false
+    networks:
+      - learnsite-net
+    restart: always
+    depends_on:
+      mssql-init:
+        condition: service_completed_successfully
+
+  # SQL Server 数据库服务
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: mssql
+    environment:
+      - ACCEPT_EULA=Y
+      # ↓↓↓ 必须修改为强密码，与 DB_PASSWORD 一致 ↓↓↓
+      - MSSQL_SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      # 默认相对路径（与 docker-compose.yml 同级的 mssql/data 目录）
+      - ./mssql/data:/var/opt/mssql
+      # ---------- Linux 环境绝对路径 ----------
+      # - /docker_data/mssql/data:/var/opt/mssql
+      # ---------- 群晖 NAS 环境绝对路径 ----------
+      # - /volume1/docker/mssql/data:/var/opt/mssql
+    networks:
+      - learnsite-net
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # 数据库初始化服务（仅在首次运行且 learnsite.sql 存在时执行）
+  mssql-init:
+    image: mcr.microsoft.com/mssql-tools:latest
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      # ↓↓↓ 必须与 MSSQL_SA_PASSWORD 一致 ↓↓↓
+      - SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      # 数据库主机地址（默认为服务名 mssql，如果连不上可改为 172.17.0.1 或宿主机 IP）
+      - DB_HOST=mssql
+    volumes:
+      # 挂载 learnsite 的 app 目录（与 learnsite 服务的挂载保持一致）
+      - ./app:/learnsite
+    networks:
+      - learnsite-net
+    command: >
+      /bin/bash -c "
+      if [ ! -f /learnsite/.db-initialized ]; then
+        echo 'First run: waiting for learnsite.sql...'
+        while [ ! -f /learnsite/sql/learnsite.sql ]; do
+          echo 'Waiting for learnsite.sql...';
+          sleep 5;
+        done
+        echo 'Running /learnsite/sql/learnsite.sql';
+        /opt/mssql-tools/bin/sqlcmd -S $${DB_HOST} -U sa -P \"$$SA_PASSWORD\" -i /learnsite/sql/learnsite.sql && \
+        touch /learnsite/.db-initialized
+        echo 'Initialization complete.'
+      else
+        echo 'Database already initialized. Skipping.'
+      fi
+      "
+    restart: "no"
+
+networks:
+  learnsite-net:
+    driver: bridge
