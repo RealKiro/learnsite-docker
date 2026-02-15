@@ -44,8 +44,7 @@ services:
       - learnsite-net
     restart: "no"
     depends_on:
-      mssql:
-        condition: service_healthy   # 等待数据库健康后再启动
+      - mssql   # 仅等待 mssql 容器启动，不等待健康（即使不健康也启动）
 
 volumes:
   learnsite_data:
