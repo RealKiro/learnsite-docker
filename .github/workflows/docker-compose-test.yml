@@ -18,31 +18,57 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 确保 sql 目录存在并包含 learnsite.sql（如果仓库中没有，需要先准备）
-      - name: Prepare SQL file
+      # 设置数据库密码（从 GitHub Secrets 读取）
+      - name: Set environment variables
         run: |
-          mkdir -p sql
-          # 如果仓库中没有 sql/learnsite.sql，可以下载或从某处复制
-          # 例如从 GitHub 下载：
-          curl -o sql/learnsite.sql https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
+          echo "MSSQL_SA_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
 
-      # 启动服务，通过环境变量传递密码
-      - name: Start services
+      # 第一步：启动 learnsite 容器（不启动 mssql）
+      - name: Start learnsite only
+        run: docker compose -f docker-compose.ci.yml up -d learnsite
+
+      # 等待 learnsite 初始化完成（出现 Initialization complete 标记）
+      - name: Wait for learnsite to initialize
         run: |
-          MSSQL_SA_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-          DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-          docker compose -f docker-compose.ci.yml up -d
+          echo "Waiting for learnsite to initialize..."
+          timeout 120s bash -c "until docker logs learnsite-ci 2>&1 | grep -q 'Initialization complete'; do sleep 5; done"
+          echo "✅ learnsite initialized."
 
-      - name: List containers
-        run: docker ps -a
+      # 检查 SQL 文件是否已生成
+      - name: Verify SQL file exists
+        run: |
+          # 使用临时容器检查 learnsite_data 卷中是否有 sql/learnsite.sql
+          docker run --rm -v learnsite_data:/data alpine ls -la /data/sql/ || exit 1
 
-      # 等待 learnsite 服务就绪（可选，因为 depends_on 已确保 mssql 健康）
+      # 第二步：启动 mssql 容器
+      - name: Start mssql
+        run: docker compose -f docker-compose.ci.yml up -d mssql
+
+      # 等待 mssql 健康
+      - name: Wait for mssql to be healthy
+        run: |
+          echo "Waiting for mssql to become healthy..."
+          timeout 60s bash -c "while [ \"\$(docker inspect --format='{{.State.Health.Status}}' mssql-ci)\" != \"healthy\" ]; do sleep 2; done"
+          echo "✅ mssql is healthy."
+
+      # 第三步：在 mssql 容器中执行 SQL 初始化脚本
+      - name: Initialize database
+        run: |
+          echo "Running SQL initialization..."
+          docker exec mssql-ci /opt/mssql-tools/bin/sqlcmd \
+            -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" \
+            -i /learnsite/sql/learnsite.sql
+          echo "✅ Database initialized."
+
+      # 等待 learnsite 完全启动（可选，因为之前已初始化）
       - name: Wait for learnsite to be ready
         run: |
-          echo "Waiting for learnsite to start..."
+          echo "Waiting for learnsite web service..."
           timeout 60s bash -c "until curl -s http://localhost:8080 > /dev/null; do sleep 2; done"
           echo "✅ learnsite is ready."
 
+      # 测试 Web 服务
       - name: Test web service
         run: |
           curl -f --retry 5 --retry-delay 5 http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
@@ -52,9 +78,9 @@ jobs:
         if: failure()
         run: |
           echo "===== learnsite logs ====="
-          docker logs learnsite-ci --tail 50 || echo "Container not found"
+          docker logs learnsite-ci --tail 50
           echo "===== mssql logs ====="
-          docker logs mssql-ci --tail 50 || echo "Container not found"
+          docker logs mssql-ci --tail 50
 
       - name: Clean up
         if: always()
