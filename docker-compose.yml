@@ -1,51 +1,45 @@
 version: '3.8'
 
 services:
-  # SQL Server 数据库服务（使用自定义镜像，内置初始化脚本）
+  # SQL Server 数据库服务（使用自定义镜像，基于 2019）
   mssql:
-    # 镜像名：由 CI 自动构建推送，客户无需修改
-    image: orzg/mssql-learnsite:latest
+    image: orzg/mssql-learnsite:latest   # CI 会自动构建并推送基于 2019 的 latest
     container_name: mssql
     environment:
       - ACCEPT_EULA=Y
       # ↓↓↓ 【必须修改】请设置一个强密码（至少8位，含大小写字母、数字和特殊字符）↓↓↓
       - MSSQL_SA_PASSWORD=YourStrong!Password123   # 【必须修改】
-      - MSSQL_PID=Express                           # 可选：可改为 Developer 或 Standard
+      - MSSQL_PID=Express                           # 可选：可改为 Developer
 
-      # 【可选修改】如需自定义 SQL 文件下载地址，可取消下面注释并修改
-      # - PRIMARY_SQL_URL=https://your-custom-url/learnsite.sql
-      # - FALLBACK_SQL_URL=https://your-fallback-url/learnsite.sql
+      # SQL 文件下载地址（可选，如不设置则使用默认值）
+      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
+      - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
     ports:
-      - "1433:1433"          # 映射宿主机端口，如需更改可修改左侧端口
+      - "1433:1433"
     volumes:
-      # 数据库文件持久化（相对路径，所有数据保存在当前目录的 data 中）
+      # 数据库文件持久化（相对路径）
       - ./data:/var/opt/mssql
     networks:
       - learnsite-net
     restart: unless-stopped
 
-  # LearnSite Web 服务（使用您已有的镜像）
+  # LearnSite Web 服务
   learnsite:
     image: orzg/learnsite-web:latest
     container_name: learnsite
     ports:
-      - "8080:8080"          # 宿主机端口，如需更改可修改左侧端口
+      - "8080:8080"
     volumes:
-      # 源码和状态持久化（相对路径，数据保存在当前目录的 app 中）
       - ./app:/app
     environment:
       - MONO_IOMAP=all
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
-      # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
-      - DB_PASSWORD=YourStrong!Password123   # 【必须修改】
-
-      # 【可选修改】如需自定义源码仓库地址，可修改下面两个 URL
+      - DB_PASSWORD=YourStrong!Password123   # 与上一致
       - PRIMARY_REPO_URL=https://github.com/RealKiro/learnsite.git
       - FALLBACK_REPO_URL=https://gitee.com/realiy/learnsite.git
-
-      - AUTO_UPDATE_SOURCE=false   # 是否每次启动检查源码更新，建议保持 false
+      - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
     restart: unless-stopped

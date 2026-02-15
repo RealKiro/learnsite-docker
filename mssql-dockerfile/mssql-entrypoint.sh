@@ -5,13 +5,14 @@ set -e
 exec > /proc/1/fd/1 2>&1
 
 # ========== 环境变量默认值（可通过 docker-compose 覆盖）==========
-# 客户无需修改此脚本，如需要自定义 SQL 文件地址，请在 docker-compose.yml 中设置以下环境变量
 : "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
 : "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
-# ===============================================================
 
-INIT_MARKER="/var/opt/mssql/db_initialized"   # 标记文件，防止重复初始化
-SQL_SCRIPT="/tmp/learnsite.sql"               # 临时 SQL 文件路径
+INIT_MARKER="/var/opt/mssql/db_initialized"          # 标记文件，防止重复初始化
+SQL_SCRIPT="/tmp/learnsite.sql"                       # 临时 SQL 文件路径
+
+# SQL Server 2019 的 sqlcmd 路径（注意不是 2025 的 mssql-tools18）
+SQLCMD="/opt/mssql-tools/bin/sqlcmd"
 
 echo "🚀 Starting SQL Server..."
 /opt/mssql/bin/sqlservr &
@@ -20,7 +21,7 @@ SQL_PID=$!
 # 等待 SQL Server 完全启动（最多 60 秒）
 echo "⏳ Waiting for SQL Server to be ready..."
 for i in {1..60}; do
-    if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" > /dev/null 2>&1; then
+    if $SQLCMD -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "SELECT 1" > /dev/null 2>&1; then
         echo "✅ SQL Server is ready."
         break
     fi
@@ -52,11 +53,11 @@ if [ ! -f "$INIT_MARKER" ]; then
 
     # 确保 learnsite 数据库存在（如果脚本中未包含创建语句）
     echo "📦 Ensuring database 'learnsite' exists..."
-    /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'learnsite') CREATE DATABASE learnsite;"
+    $SQLCMD -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'learnsite') CREATE DATABASE learnsite;"
 
     # 执行初始化脚本
     echo "⚙️ Running initialization script..."
-    if /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d learnsite -i "$SQL_SCRIPT"; then
+    if $SQLCMD -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d learnsite -i "$SQL_SCRIPT"; then
         touch "$INIT_MARKER"
         rm -f "$SQL_SCRIPT"
         echo "✅ Database initialized."
