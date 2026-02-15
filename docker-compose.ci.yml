@@ -1,23 +1,26 @@
 version: '3.8'
 
 services:
-  # SQL Server 数据库服务
+  # SQL Server 数据库服务 (基于官方文档)
   mssql:
-    image: mcr.microsoft.com/mssql/server:2019-latest
+    # 使用官方推荐的 2025 最新版镜像标签
+    image: mcr.microsoft.com/mssql/server:2025-latest
     container_name: mssql-ci
     environment:
       - ACCEPT_EULA=Y
+      # 【重要】官方文档强调使用 MSSQL_SA_PASSWORD，而非 SA_PASSWORD
+      # 密码必须符合策略：至少8位，含大小写字母、数字和符号
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=Express
+      # 可选，指定版本（Developer/Express/Standard/Enterprise）
+      - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
-    networks:
-      - learnsite-net
+    # 移除了 healthcheck，由 CI 步骤主动探测
     restart: "no"
 
-  # LearnSite Web 服务
+  # LearnSite Web 服务 (保持不变)
   learnsite:
     image: orzg/learnsite-web:latest
     container_name: learnsite-ci
@@ -30,13 +33,14 @@ services:
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
+      # 必须与 MSSQL_SA_PASSWORD 完全一致
       - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
     restart: "no"
     depends_on:
-      - mssql   # 仅等待 mssql 容器启动，不等待健康
+      - mssql
 
 volumes:
   learnsite_data:

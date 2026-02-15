@@ -28,13 +28,14 @@ jobs:
       - name: List containers
         run: docker ps -a
 
-      # ========== 等待数据库真正可连接（直接在 mssql 容器内测试）==========
+      # ========== 等待数据库真正可连接（直接在 mssql 容器内测试，使用新工具路径）==========
       - name: Wait for database to be ready
         run: |
           echo "🔍 等待数据库就绪..."
+          # 确认 sqlcmd 路径（2025 版可能在 /opt/mssql-tools18/bin）
+          SQLCMD_PATH="/opt/mssql-tools18/bin/sqlcmd"
           for i in {1..30}; do
-            # 直接在 mssql 容器内执行 sqlcmd 连接 localhost
-            if docker exec mssql-ci /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
+            if docker exec mssql-ci $SQLCMD_PATH -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
               echo "✅ 数据库已就绪。"
               break
             fi
@@ -58,9 +59,8 @@ jobs:
       - name: Check 1 - Test database connection from learnsite
         run: |
           echo "🔍 检查步骤1：测试 learnsite 容器能否连接到 mssql 容器..."
-          # 使用临时容器测试网络连接
-          if docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
-            /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
+          # 直接在 mssql 容器内执行连接测试（避免额外工具镜像）
+          if docker exec mssql-ci /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
             echo "✅ 连接成功：learnsite 可以正常连接到 mssql，密码正确。"
           else
             echo "❌ 连接失败：无法连接到 mssql，请检查密码是否正确。"
@@ -72,8 +72,7 @@ jobs:
       - name: Check 2 - Verify database 'learnsite' exists
         run: |
           echo "🔍 检查步骤2：验证数据库 'learnsite' 是否已创建..."
-          DB_EXISTS=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
-            /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" \
+          DB_EXISTS=$(docker exec mssql-ci /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" \
             -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name = 'learnsite'" -h -1)
           if [ -n "$DB_EXISTS" ]; then
             echo "✅ 数据库 'learnsite' 已存在。"
@@ -100,8 +99,7 @@ jobs:
           fi
 
           # 验证某张关键表是否存在（例如 Student 表）
-          TABLE_EXISTS=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
-            /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -d learnsite \
+          TABLE_EXISTS=$(docker exec mssql-ci /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" -d learnsite \
             -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'Student'" -h -1)
           if [ "$TABLE_EXISTS" -gt 0 ]; then
             echo "✅ 关键表 'Student' 已存在，数据库初始化成功。"
