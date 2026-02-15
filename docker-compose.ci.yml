@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # LearnSite Web 服务（CI 测试版）
   learnsite:
     image: orzg/learnsite-web:latest
     container_name: learnsite-ci
@@ -19,9 +20,10 @@ services:
       - learnsite-net
     restart: "no"
     depends_on:
-      mssql-init:
-        condition: service_completed_successfully
+      mssql:
+        condition: service_healthy   # 等待 mssql 健康后再启动
 
+  # SQL Server 数据库服务（CI 测试版）
   mssql:
     image: mcr.microsoft.com/mssql/server:2019-latest
     container_name: mssql-ci
@@ -33,39 +35,16 @@ services:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
+      # 挂载 SQL 文件到初始化目录（文件需提前下载到 ./sql/learnsite.sql）
+      - ./sql/learnsite.sql:/docker-entrypoint-initdb.d/learnsite.sql
     networks:
       - learnsite-net
-    restart: "no"
-
-  mssql-init:
-    image: mcr.microsoft.com/mssql-tools:latest
-    container_name: mssql-init
-    depends_on:
-      - mssql
-    environment:
-      - SA_PASSWORD=${SA_PASSWORD}
-      - DB_HOST=mssql
-    networks:
-      - learnsite-net
-    command:
-      - /bin/bash
-      - -c
-      - |
-        echo "Downloading learnsite.sql from https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql..."
-        curl -f -sSL -o /tmp/learnsite.sql "https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql" || { echo "Download failed"; exit 1; }
-        echo "Download complete. Waiting for SQL Server to be ready..."
-        for i in {1..30}; do
-          /opt/mssql-tools/bin/sqlcmd -S "${DB_HOST}" -U sa -P "${SA_PASSWORD}" -Q "SELECT 1" > /dev/null 2>&1
-          if [ $? -eq 0 ]; then
-            echo "SQL Server is ready."
-            break
-          fi
-          echo "Attempt $i: Waiting for SQL Server..."
-          sleep 2
-        done
-        echo "Executing SQL script..."
-        /opt/mssql-tools/bin/sqlcmd -S "${DB_HOST}" -U sa -P "${SA_PASSWORD}" -i /tmp/learnsite.sql
-        echo "Database initialization completed."
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: "no"
 
 volumes:

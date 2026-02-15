@@ -18,32 +18,34 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 直接启动服务，通过环境变量传递密码
+      # 创建 sql 目录并下载 learnsite.sql 文件
+      - name: Download SQL file
+        run: |
+          mkdir -p sql
+          curl -f -sSL -o sql/learnsite.sql "https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
+          echo "SQL file downloaded."
+
+      # 启动服务，通过环境变量传递密码
       - name: Start services
         run: |
           MSSQL_SA_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-          SA_PASSWORD="${{ secrets.DB_PASSWORD }}" \
           DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
           docker compose -f docker-compose.ci.yml up -d
 
       - name: List containers
         run: docker ps -a
 
-      - name: Wait for mssql-init to complete
+      # 等待 mssql 健康（确保数据库初始化完成）
+      - name: Wait for mssql to be healthy
         run: |
-          echo "Waiting for mssql-init to exit..."
-          timeout 90s bash -c "while docker ps --filter 'name=mssql-init' --format '{{.Status}}' | grep -q 'Up'; do sleep 2; done"
-          EXIT_CODE=$(docker inspect mssql-init --format='{{.State.ExitCode}}')
-          if [ "$EXIT_CODE" -ne 0 ]; then
-            echo "❌ mssql-init failed. Logs:"
-            docker logs mssql-init
-            exit 1
-          fi
-          echo "✅ mssql-init completed successfully."
+          echo "Waiting for mssql-ci to become healthy..."
+          timeout 90s bash -c "while [ \"\$(docker inspect --format='{{.State.Health.Status}}' mssql-ci 2>/dev/null)\" != \"healthy\" ]; do sleep 2; done"
+          echo "✅ mssql is healthy."
 
-      - name: Test web service
+      # 等待 learnsite 服务就绪（可选的额外等待）
+      - name: Wait for web service
         run: |
-          sleep 5
+          sleep 10
           curl -f --retry 5 --retry-delay 5 http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
           echo "✅ Web service responded successfully."
 
@@ -54,8 +56,6 @@ jobs:
           docker logs learnsite-ci --tail 50 || echo "Container not found"
           echo "===== mssql logs ====="
           docker logs mssql-ci --tail 50 || echo "Container not found"
-          echo "===== mssql-init logs ====="
-          docker logs mssql-init --tail 50 || echo "Container not found"
 
       - name: Clean up
         if: always()
