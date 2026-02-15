@@ -29,17 +29,28 @@ jobs:
           DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
           docker compose -f docker-compose.ci.yml up -d
 
+      # 列出所有容器（调试用）
       - name: List containers
         run: docker ps -a
 
-      # 等待 mssql 容器完成数据库初始化（检测标记文件）
+      # 检查 MSSQL 容器是否正在运行
+      - name: Check MSSQL container status
+        run: |
+          if ! docker ps --filter "name=mssql-ci" --format '{{.Names}}' | grep -q mssql-ci; then
+            echo "❌ MSSQL container is not running. Logs:"
+            docker logs mssql-ci || echo "No logs available."
+            exit 1
+          fi
+          echo "✅ MSSQL container is running."
+
+      # 等待 MSSQL 容器完成数据库初始化（检测标记文件）
       - name: Wait for MSSQL to initialize
         run: |
           echo "⏳ Waiting for MSSQL to initialize database..."
-          timeout 180s bash -c "until docker exec mssql-ci test -f /var/opt/mssql/.initialized; do sleep 5; done"
+          timeout 180s bash -c "until docker exec mssql-ci test -f /var/opt/mssql/db_initialized; do sleep 5; done"
           echo "✅ MSSQL initialized."
 
-      # 等待 learnsite 容器初始化完成（检测标记文件）
+      # 等待 LearnSite 容器初始化完成（检测标记文件）
       - name: Wait for LearnSite to initialize
         run: |
           echo "⏳ Waiting for LearnSite to finish initialization..."
@@ -61,7 +72,7 @@ jobs:
           echo "===== mssql logs ====="
           docker logs mssql-ci --tail 50
 
-      # 清理
+      # 清理资源
       - name: Clean up
         if: always()
         run: docker compose -f docker-compose.ci.yml down -v
