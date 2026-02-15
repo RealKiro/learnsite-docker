@@ -9,7 +9,7 @@ services:
       - ACCEPT_EULA=Y
       # ↓↓↓ 【必须修改】请设置一个强密码（至少8位，含大小写字母、数字和特殊字符）↓↓↓
       - MSSQL_SA_PASSWORD=YourStrong!Password123   # 【必须修改】
-      - MSSQL_PID=Express                           # 可选：可改为 Developer
+      - MSSQL_PID=Developer
 
       # SQL 文件下载地址（可选，如不设置则使用默认值）
       - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
