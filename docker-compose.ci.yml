@@ -1,87 +1,63 @@
-version: '3.8'
+name: Docker Compose Integration Test (CI)
 
-services:
-  # LearnSite Web 服务（CI 测试版）
-  learnsite:
-    image: orzg/learnsite-web:latest
-    container_name: learnsite-ci
-    ports:
-      - "8080:8080"
-    volumes:
-      - learnsite_data:/app
-    environment:
-      - MONO_IOMAP=all
-      - DB_HOST=mssql
-      - DB_NAME=learnsite
-      - DB_USER=sa
-      # 数据库密码从环境变量读取（需在运行前设置）
-      - DB_PASSWORD=${DB_PASSWORD}
-      - AUTO_UPDATE_SOURCE=false
-    networks:
-      - learnsite-net
-    restart: "no"
-    depends_on:
-      mssql-init:
-        condition: service_completed_successfully
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
 
-  # SQL Server 数据库服务（CI 测试版）
-  mssql:
-    image: mcr.microsoft.com/mssql/server:2019-latest
-    container_name: mssql-ci
-    environment:
-      - ACCEPT_EULA=Y
-      # SA 密码从环境变量读取（需与 DB_PASSWORD 一致）
-      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=Express
-    ports:
-      - "1433:1433"
-    volumes:
-      - mssql_data:/var/opt/mssql
-    networks:
-      - learnsite-net
-    restart: "no"
+jobs:
+  test:
+    runs-on: ubuntu-latest
 
-  # 数据库初始化服务（直接从 URL 下载 SQL 文件）
-  mssql-init:
-    image: mcr.microsoft.com/mssql-tools:latest
-    container_name: mssql-init
-    depends_on:
-      - mssql
-    environment:
-      # SA 密码从环境变量读取（与 MSSQL_SA_PASSWORD 一致）
-      - SA_PASSWORD=${SA_PASSWORD}
-      # 数据库主机地址（默认 mssql，可覆盖，如连不上可改为 172.17.0.1 或宿主机 IP）
-      - DB_HOST=mssql
-    networks:
-      - learnsite-net
-    command:
-      - /bin/bash
-      - -c
-      - |
-        # 直接硬编码 URL，避免变量问题
-        SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
-        echo "Downloading learnsite.sql from $SQL_URL..."
-        curl -f -sSL -o /tmp/learnsite.sql "$SQL_URL" || { echo "Download failed"; exit 1; }
-        echo "Download complete. Waiting for SQL Server to be ready..."
-        # 循环尝试连接数据库，最多尝试 30 次，每次间隔 2 秒
-        for i in {1..30}; do
-          /opt/mssql-tools/bin/sqlcmd -S "${DB_HOST}" -U sa -P "${SA_PASSWORD}" -Q "SELECT 1" > /dev/null 2>&1
-          if [ $? -eq 0 ]; then
-            echo "SQL Server is ready."
-            break
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set database passwords
+        run: |
+          echo "MSSQL_SA_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
+          echo "SA_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
+
+      - name: Start services
+        run: docker compose -f docker-compose.ci.yml up -d
+
+      - name: List containers
+        run: docker ps -a
+
+      - name: Wait for mssql-init to complete
+        run: |
+          echo "Waiting for mssql-init to exit..."
+          timeout 90s bash -c "while docker ps --filter 'name=mssql-init' --format '{{.Status}}' | grep -q 'Up'; do sleep 2; done"
+          EXIT_CODE=$(docker inspect mssql-init --format='{{.State.ExitCode}}')
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "❌ mssql-init failed. Logs:"
+            docker logs mssql-init
+            exit 1
           fi
-          echo "Attempt $i: Waiting for SQL Server..."
-          sleep 2
-        done
-        echo "Executing SQL script..."
-        /opt/mssql-tools/bin/sqlcmd -S "${DB_HOST}" -U sa -P "${SA_PASSWORD}" -i /tmp/learnsite.sql
-        echo "Database initialization completed."
-    restart: "no"
+          echo "✅ mssql-init completed successfully."
 
-volumes:
-  learnsite_data:
-  mssql_data:
+      - name: Test web service
+        run: |
+          sleep 5
+          curl -f --retry 5 --retry-delay 5 http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
+          echo "✅ Web service responded successfully."
 
-networks:
-  learnsite-net:
-    driver: bridge
+      - name: Display logs on failure
+        if: failure()
+        run: |
+          echo "===== learnsite logs ====="
+          docker logs learnsite-ci --tail 50 || echo "Container not found"
+          echo "===== mssql logs ====="
+          docker logs mssql-ci --tail 50 || echo "Container not found"
+          echo "===== mssql-init logs ====="
+          docker logs mssql-init --tail 50 || echo "Container not found"
+
+      - name: Clean up
+        if: always()
+        run: docker compose -f docker-compose.ci.yml down -v
