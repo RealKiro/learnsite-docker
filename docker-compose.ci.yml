@@ -50,6 +50,7 @@ services:
   # 数据库初始化服务（CI 中直接从 URL 下载 SQL 文件）
   mssql-init:
     image: mcr.microsoft.com/mssql-tools:latest
+    container_name: mssql-init
     depends_on:
       mssql:
         condition: service_healthy
