@@ -58,12 +58,11 @@ jobs:
           timeout 180s bash -c "until docker exec mssql-ci test -f /var/opt/mssql/db_initialized; do sleep 5; done"
           echo "✅ MSSQL initialized."
 
-      # 验证数据库是否存在
+      # ========== 验证数据库是否存在（直接在 mssql 容器内执行）==========
       - name: Verify database 'learnsite' exists
         run: |
           echo "🔍 Checking if database 'learnsite' exists..."
-          DB_EXISTS=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
-            /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" \
+          DB_EXISTS=$(docker exec mssql-ci /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" \
             -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name = 'learnsite'" -h -1)
           if [ -n "$DB_EXISTS" ]; then
             echo "✅ Database 'learnsite' exists."
@@ -72,12 +71,11 @@ jobs:
             exit 1
           fi
 
-      # 验证关键表是否存在
+      # ========== 验证关键表是否存在 ==========
       - name: Verify table 'Student' exists
         run: |
           echo "🔍 Checking if table 'Student' exists in learnsite database..."
-          TABLE_COUNT=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
-            /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -d learnsite \
+          TABLE_COUNT=$(docker exec mssql-ci /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" -d learnsite \
             -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'Student'" -h -1)
           if [ "$TABLE_COUNT" -gt 0 ]; then
             echo "✅ Table 'Student' exists."
