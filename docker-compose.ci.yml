@@ -1,23 +1,24 @@
 version: '3.8'
 
 services:
+  # SQL Server 数据库服务（CI 测试版，使用自定义镜像）
   mssql:
-    image: mcr.microsoft.com/mssql/server:2025-latest
+    image: orzg/mssql-learnsite:latest
     container_name: mssql-ci
-    entrypoint: /entrypoint.ci.sh
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      - MSSQL_PID=Developer
+      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
+      - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
     ports:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
-      - ./entrypoint.ci.sh:/entrypoint.ci.sh:ro
     networks:
       - learnsite-net
     restart: "no"
 
+  # LearnSite Web 服务（CI 测试版）
   learnsite:
     image: orzg/learnsite-web:latest
     container_name: learnsite-ci

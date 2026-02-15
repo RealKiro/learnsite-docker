@@ -10,9 +10,7 @@ exec > /proc/1/fd/1 2>&1
 
 INIT_MARKER="/var/opt/mssql/db_initialized"          # 标记文件，防止重复初始化
 SQL_SCRIPT="/tmp/learnsite.sql"                       # 临时 SQL 文件路径
-
-# SQL Server 2019 的 sqlcmd 路径（注意不是 2025 的 mssql-tools18）
-SQLCMD="/opt/mssql-tools/bin/sqlcmd"
+SQLCMD="/opt/mssql-tools/bin/sqlcmd"                  # Azure SQL Edge 的 sqlcmd 路径
 
 echo "🚀 Starting SQL Server..."
 /opt/mssql/bin/sqlservr &

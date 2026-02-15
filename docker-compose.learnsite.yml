@@ -5,40 +5,32 @@ services:
     image: orzg/learnsite-web:latest
     container_name: learnsite
 
-    # 【网络模式选择】
-    # 方案 A：使用 host 网络（容器与宿主机共享网络）
-    #   - 优点：简单，端口自动映射，容器间可通过 localhost 或 172.17.0.1 通信。
-    #   - 缺点：端口冲突风险，安全性较低。
-    # 方案 B：使用默认 bridge 网络（容器独立，需手动映射端口）
-    #   - 优点：隔离性好，端口独立。
-    #   - 缺点：容器间无法通过服务名通信，需使用宿主机 IP 或具体容器 IP。
-    #
-    # 请根据您的需求选择一种模式，取消对应行的注释，并注释掉另一种。
-    
-    # 方案 A：host 模式（推荐，简单）
+    # 【网络模式选择】必须与 mssql 保持一致
+    # 方案 A：host 模式
     network_mode: host
     # 如果使用 host 模式，不需要 ports 映射，请注释掉下方 ports 部分
 
     # 方案 B：bridge 模式（如需使用，取消下面注释，并注释上方 network_mode: host）
     # network_mode: bridge
     # ports:
-    #   - "8080:8080"   # 如果端口冲突，可修改左侧端口
+    #   - "8080:8080"
 
     volumes:
-      # 数据持久化：使用相对路径，所有数据保存在当前目录的 app 子目录中
+      # 源码和状态持久化：使用相对路径，所有数据保存在当前目录的 app 子目录中
       - ./app:/app
 
     environment:
       - MONO_IOMAP=all
       # 数据库主机地址：
-      #   - 如果使用 host 模式，可设为 localhost 或 172.17.0.1（Docker 默认网关）
-      #   - 如果使用 bridge 模式，需设为宿主机 IP 或 mssql 容器的具体 IP（默认 bridge 中无 DNS 解析）
-      - DB_HOST=172.17.0.1
+      #   - 如果使用 host 模式，可设为 localhost 或 172.17.0.1
+      #   - 如果使用 bridge 模式，需设为宿主机 IP 或 localhost（因为无法通过服务名解析）
+      - DB_HOST=localhost
       - DB_NAME=learnsite
       - DB_USER=sa
-      # ↓↓↓ 【必须修改】请设置与 mssql 服务相同的强密码（至少8位，含大小写字母、数字和特殊字符）↓↓↓
+      # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=YourStrong!Password123
       - AUTO_UPDATE_SOURCE=false
+
       # 源码仓库地址（可选，如不设置则使用镜像内的默认值）
       - PRIMARY_REPO_URL=https://gitee.com/realiy/learnsite.git
       - FALLBACK_REPO_URL=https://github.com/RealKiro/learnsite.git
