@@ -18,21 +18,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 如果需要登录私有镜像仓库，取消下面注释并配置 Secrets
-      # - name: Login to Docker Hub
-      #   uses: docker/login-action@v3
-      #   with:
-      #     username: ${{ secrets.DOCKER_USERNAME }}
-      #     password: ${{ secrets.DOCKER_PASSWORD }}
-
-      # 设置数据库密码（从 GitHub Secrets 读取，需确保 Secrets 中已添加 DB_PASSWORD）
+      # 设置数据库密码（从 GitHub Secrets 读取）
       - name: Set database passwords
         run: |
           echo "MSSQL_SA_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
           echo "SA_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
           echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> $GITHUB_ENV
 
-      # 启动所有服务（依赖关系已在 compose 文件中定义）
+      # 启动所有服务
       - name: Start services
         run: docker compose -f docker-compose.ci.yml up -d
 
@@ -40,18 +33,11 @@ jobs:
       - name: List containers
         run: docker ps -a
 
-      # 等待 mssql 容器健康（确保健康检查通过）
-      - name: Wait for mssql to be healthy
-        run: |
-          echo "Waiting for mssql-ci to become healthy..."
-          timeout 60s bash -c "while [ \"\$(docker inspect --format='{{.State.Health.Status}}' mssql-ci 2>/dev/null)\" != \"healthy\" ]; do sleep 2; done"
-          echo "✅ mssql is healthy."
-
       # 等待 mssql-init 容器完成初始化并退出
       - name: Wait for mssql-init to complete
         run: |
           echo "Waiting for mssql-init to exit..."
-          timeout 60s bash -c "while docker ps --filter 'name=mssql-init' --format '{{.Status}}' | grep -q 'Up'; do sleep 2; done"
+          timeout 90s bash -c "while docker ps --filter 'name=mssql-init' --format '{{.Status}}' | grep -q 'Up'; do sleep 2; done"
           EXIT_CODE=$(docker inspect mssql-init --format='{{.State.ExitCode}}')
           if [ "$EXIT_CODE" -ne 0 ]; then
             echo "❌ mssql-init failed. Logs:"
