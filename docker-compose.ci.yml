@@ -1,26 +1,25 @@
 version: '3.8'
 
 services:
-  # SQL Server 数据库服务 (基于官方文档)
+  # SQL Server 数据库服务（CI 测试版）
   mssql:
-    # 使用官方推荐的 2025 最新版镜像标签
     image: mcr.microsoft.com/mssql/server:2025-latest
     container_name: mssql-ci
+    entrypoint: /entrypoint.ci.sh            # 使用自定义入口脚本
     environment:
       - ACCEPT_EULA=Y
-      # 【重要】官方文档强调使用 MSSQL_SA_PASSWORD，而非 SA_PASSWORD
-      # 密码必须符合策略：至少8位，含大小写字母、数字和符号
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
-      # 可选，指定版本（Developer/Express/Standard/Enterprise）
       - MSSQL_PID=Developer
     ports:
       - "1433:1433"
     volumes:
-      - mssql_data:/var/opt/mssql
-    # 移除了 healthcheck，由 CI 步骤主动探测
+      - mssql_data:/var/opt/mssql            # 持久化数据库文件
+      - ./entrypoint.ci.sh:/entrypoint.ci.sh:ro   # 挂载自定义入口脚本
+    networks:
+      - learnsite-net
     restart: "no"
 
-  # LearnSite Web 服务 (保持不变)
+  # LearnSite Web 服务（CI 测试版）
   learnsite:
     image: orzg/learnsite-web:latest
     container_name: learnsite-ci
@@ -33,14 +32,13 @@ services:
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
-      # 必须与 MSSQL_SA_PASSWORD 完全一致
       - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
     restart: "no"
     depends_on:
-      - mssql
+      - mssql   # 仅等待 mssql 容器启动，其内部初始化由入口脚本处理
 
 volumes:
   learnsite_data:
