@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e
 
+# 将所有输出重定向到控制台（便于 Docker 日志捕获）
+exec > /proc/1/fd/1 2>&1
+
 INIT_MARKER="/var/opt/mssql/db_initialized"
 SQL_URL="https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql"
 SQL_SCRIPT="/tmp/learnsite.sql"
@@ -28,7 +31,7 @@ if [ ! -f "$INIT_MARKER" ]; then
     curl -f -sSL -o "$SQL_SCRIPT" "$SQL_URL" || { echo "❌ Download failed"; exit 1; }
     echo "✅ learnsite.sql downloaded."
 
-    # 确保数据库存在（如果脚本中未包含 CREATE DATABASE）
+    # 确保数据库存在
     echo "📦 Ensuring database 'learnsite' exists..."
     /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'learnsite') CREATE DATABASE learnsite;"
 

@@ -32,15 +32,24 @@ jobs:
       - name: List containers
         run: docker ps -a
 
-      # 检查 MSSQL 容器是否正在运行
+      # 短暂等待后无条件输出 MSSQL 容器日志（无论运行与否）
+      - name: Debug MSSQL logs (early)
+        run: |
+          echo "⏳ Waiting 10 seconds for container to stabilize..."
+          sleep 10
+          echo "===== MSSQL early logs ====="
+          docker logs mssql-ci 2>&1 || echo "No logs available (container may not exist)."
+
+      # 检查 MSSQL 容器是否正在运行，并输出日志
       - name: Check MSSQL container status
         run: |
           if ! docker ps --filter "name=mssql-ci" --format '{{.Names}}' | grep -q mssql-ci; then
-            echo "❌ MSSQL container is not running. Logs:"
-            docker logs mssql-ci || echo "No logs available."
+            echo "❌ MSSQL container is not running. Full logs:"
+            docker logs mssql-ci 2>&1 || echo "No logs available."
             exit 1
+          else
+            echo "✅ MSSQL container is running."
           fi
-          echo "✅ MSSQL container is running."
 
       # 等待 MSSQL 容器完成数据库初始化（检测标记文件）
       - name: Wait for MSSQL to initialize
@@ -49,7 +58,7 @@ jobs:
           timeout 180s bash -c "until docker exec mssql-ci test -f /var/opt/mssql/db_initialized; do sleep 5; done"
           echo "✅ MSSQL initialized."
 
-      # ========== 新增：验证数据库是否成功创建 ==========
+      # 验证数据库是否存在
       - name: Verify database 'learnsite' exists
         run: |
           echo "🔍 Checking if database 'learnsite' exists..."
@@ -63,7 +72,7 @@ jobs:
             exit 1
           fi
 
-      # 验证关键表是否存在（例如 Student 表）
+      # 验证关键表是否存在
       - name: Verify table 'Student' exists
         run: |
           echo "🔍 Checking if table 'Student' exists in learnsite database..."
@@ -76,14 +85,14 @@ jobs:
             echo "⚠️ Table 'Student' not found. This might be normal if the app creates tables via upgrade page."
           fi
 
-      # 等待 LearnSite 容器初始化完成（检测标记文件）
+      # 等待 LearnSite 容器初始化完成
       - name: Wait for LearnSite to initialize
         run: |
           echo "⏳ Waiting for LearnSite to finish initialization..."
           timeout 120s bash -c "until docker exec learnsite-ci test -f /app/.initialized; do sleep 5; done"
           echo "✅ LearnSite initialized."
 
-      # ========== 触发升级页面，确保所有表创建 ==========
+      # 触发升级页面
       - name: Trigger upgrade page
         run: |
           echo "🔍 Accessing /upgrade.aspx to ensure tables are created..."
