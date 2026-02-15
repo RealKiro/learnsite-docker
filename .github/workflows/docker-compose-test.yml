@@ -29,7 +29,6 @@ jobs:
           DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
           docker compose -f docker-compose.ci.yml up -d
 
-      # 列出所有容器（调试用）
       - name: List containers
         run: docker ps -a
 
@@ -50,12 +49,46 @@ jobs:
           timeout 180s bash -c "until docker exec mssql-ci test -f /var/opt/mssql/db_initialized; do sleep 5; done"
           echo "✅ MSSQL initialized."
 
+      # ========== 新增：验证数据库是否成功创建 ==========
+      - name: Verify database 'learnsite' exists
+        run: |
+          echo "🔍 Checking if database 'learnsite' exists..."
+          DB_EXISTS=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" \
+            -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name = 'learnsite'" -h -1)
+          if [ -n "$DB_EXISTS" ]; then
+            echo "✅ Database 'learnsite' exists."
+          else
+            echo "❌ Database 'learnsite' does not exist. Initialization may have failed."
+            exit 1
+          fi
+
+      # 验证关键表是否存在（例如 Student 表）
+      - name: Verify table 'Student' exists
+        run: |
+          echo "🔍 Checking if table 'Student' exists in learnsite database..."
+          TABLE_COUNT=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools18/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -d learnsite \
+            -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'Student'" -h -1)
+          if [ "$TABLE_COUNT" -gt 0 ]; then
+            echo "✅ Table 'Student' exists."
+          else
+            echo "⚠️ Table 'Student' not found. This might be normal if the app creates tables via upgrade page."
+          fi
+
       # 等待 LearnSite 容器初始化完成（检测标记文件）
       - name: Wait for LearnSite to initialize
         run: |
           echo "⏳ Waiting for LearnSite to finish initialization..."
           timeout 120s bash -c "until docker exec learnsite-ci test -f /app/.initialized; do sleep 5; done"
           echo "✅ LearnSite initialized."
+
+      # ========== 触发升级页面，确保所有表创建 ==========
+      - name: Trigger upgrade page
+        run: |
+          echo "🔍 Accessing /upgrade.aspx to ensure tables are created..."
+          curl -s -X POST -d "Btnupgrade=执行更新" http://localhost:8080/upgrade.aspx || true
+          sleep 5
 
       # 测试网站首页
       - name: Test web service
