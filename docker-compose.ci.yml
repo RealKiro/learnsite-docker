@@ -7,7 +7,6 @@ services:
     container_name: mssql-ci
     environment:
       - ACCEPT_EULA=Y
-      # SA 密码从环境变量读取（需与 DB_PASSWORD 一致）
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
       - MSSQL_PID=Express
     ports:
@@ -37,14 +36,13 @@ services:
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
-      # 数据库密码从环境变量读取
       - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
     restart: "no"
     depends_on:
-      - mssql   # 仅等待 mssql 容器启动，不等待健康（即使不健康也启动）
+      - mssql   # 仅等待 mssql 容器启动，不等待健康
 
 volumes:
   learnsite_data:

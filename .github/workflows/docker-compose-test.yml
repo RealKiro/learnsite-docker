@@ -28,13 +28,13 @@ jobs:
       - name: List containers
         run: docker ps -a
 
-      # ========== 第一步：等待数据库真正可连接 ==========
+      # ========== 等待数据库真正可连接（直接在 mssql 容器内测试）==========
       - name: Wait for database to be ready
         run: |
           echo "🔍 等待数据库就绪..."
           for i in {1..30}; do
-            if docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
-              /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
+            # 直接在 mssql 容器内执行 sqlcmd 连接 localhost
+            if docker exec mssql-ci /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
               echo "✅ 数据库已就绪。"
               break
             fi
@@ -42,24 +42,23 @@ jobs:
             sleep 5
             if [ $i -eq 30 ]; then
               echo "❌ 数据库等待超时，请检查 mssql 日志。"
-              docker logs mssql-ci
+              docker logs mssql-ci --tail 50
               exit 1
             fi
           done
 
-      # ========== 第二步：等待 LearnSite 初始化完成（标记文件出现）==========
+      # ========== 等待 LearnSite 初始化完成（标记文件出现）==========
       - name: Wait for LearnSite to initialize
         run: |
           echo "🔍 等待 LearnSite 完成首次运行（标记文件 .initialized）..."
           timeout 120s bash -c "until docker exec learnsite-ci test -f /app/.initialized; do sleep 5; done"
           echo "✅ LearnSite 初始化完成。"
 
-      # ========== 第三步：检查 learnsite 和 mssql 连接 ==========
+      # ========== 检查 learnsite 和 mssql 连接 ==========
       - name: Check 1 - Test database connection from learnsite
         run: |
           echo "🔍 检查步骤1：测试 learnsite 容器能否连接到 mssql 容器..."
-          # 在 learnsite 容器内执行简单的 SQL 查询（如果容器内有 sqlcmd 则更好，这里用 ping 替代）
-          # 更准确的方式：使用临时容器测试连接，因为 learnsite 容器可能没有 sqlcmd
+          # 使用临时容器测试网络连接
           if docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
             /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
             echo "✅ 连接成功：learnsite 可以正常连接到 mssql，密码正确。"
@@ -69,7 +68,7 @@ jobs:
             exit 1
           fi
 
-      # ========== 第四步：检查 learnsite 数据库是否存在 ==========
+      # ========== 检查 learnsite 数据库是否存在 ==========
       - name: Check 2 - Verify database 'learnsite' exists
         run: |
           echo "🔍 检查步骤2：验证数据库 'learnsite' 是否已创建..."
@@ -82,7 +81,7 @@ jobs:
             echo "⚠️ 数据库 'learnsite' 尚未创建，将在升级页面触发后自动创建。"
           fi
 
-      # ========== 第五步：触发 upgrade.aspx 升级并检查结果 ==========
+      # ========== 触发 upgrade.aspx 升级并检查结果 ==========
       - name: Check 3 - Trigger database upgrade via upgrade.aspx
         run: |
           echo "🔍 检查步骤3：访问升级页面 /upgrade.aspx 并模拟点击“执行更新”按钮..."
@@ -100,7 +99,7 @@ jobs:
             echo "$RESPONSE" | head -20
           fi
 
-          # 可选：验证某张关键表是否存在（例如 Student 表）
+          # 验证某张关键表是否存在（例如 Student 表）
           TABLE_EXISTS=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
             /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -d learnsite \
             -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'Student'" -h -1)
