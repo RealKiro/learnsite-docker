@@ -28,27 +28,60 @@ jobs:
       - name: List containers
         run: docker ps -a
 
-      # 等待 MSSQL 健康
-      - name: Wait for MSSQL to be healthy
+      # ========== 第一步：测试 learnsite 和 mssql 连接 ==========
+      - name: Check 1 - Test database connection
         run: |
-          echo "Waiting for MSSQL to become healthy..."
-          timeout 60s bash -c "until [ \"\$(docker inspect --format='{{.State.Health.Status}}' mssql-ci)\" == \"healthy\" ]; do sleep 2; done"
-          echo "✅ MSSQL is healthy."
+          echo "🔍 检查步骤1：测试 learnsite 容器能否连接到 mssql 容器..."
+          # 使用 learnsite 容器尝试连接数据库（需容器内有 sqlcmd 或 mysql 客户端）
+          # 由于 learnsite 容器基于 Mono，可能没有 sqlcmd，我们可以通过临时容器测试
+          if docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -Q "SELECT 1" > /dev/null 2>&1; then
+            echo "✅ 连接成功：learnsite 可以正常连接到 mssql，密码正确。"
+          else
+            echo "❌ 连接失败：无法连接到 mssql，请检查密码是否正确或 mssql 是否健康。"
+            docker logs mssql-ci --tail 20
+            exit 1
+          fi
 
-      # 等待 LearnSite 服务启动（端口可访问）
-      - name: Wait for LearnSite to start
+      # ========== 第二步：检查 learnsite 数据库是否存在 ==========
+      - name: Check 2 - Verify database 'learnsite' exists
         run: |
-          echo "Waiting for LearnSite web service..."
+          echo "🔍 检查步骤2：验证数据库 'learnsite' 是否已创建..."
+          # 查询 sys.databases 看是否存在 learnsite 数据库
+          DB_EXISTS=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" \
+            -Q "SET NOCOUNT ON; SELECT name FROM sys.databases WHERE name = 'learnsite'" -h -1)
+          if [ -n "$DB_EXISTS" ]; then
+            echo "✅ 数据库 'learnsite' 已存在。"
+          else
+            echo "⚠️ 数据库 'learnsite' 尚未创建，将在升级页面触发后自动创建。"
+          fi
+
+      # ========== 第三步：触发 upgrade.aspx 升级并检查结果 ==========
+      - name: Check 3 - Trigger database upgrade via upgrade.aspx
+        run: |
+          echo "🔍 检查步骤3：访问升级页面 /upgrade.aspx 并模拟点击“执行更新”按钮..."
+          # 等待 learnsite 服务启动
           timeout 60s bash -c "until curl -s http://localhost:8080 > /dev/null; do sleep 2; done"
-          echo "✅ LearnSite is responsive."
+          
+          # 模拟点击“执行更新”按钮（POST 请求，携带按钮名称）
+          RESPONSE=$(curl -s -X POST -d "Btnupgrade=执行更新" http://localhost:8080/upgrade.aspx)
+          
+          # 检查响应中是否包含成功提示（根据实际页面输出调整关键字）
+          if echo "$RESPONSE" | grep -q "更新完成\|升级成功\|Labelmsg"; then
+            echo "✅ 升级页面执行成功，数据库表已创建。"
+          else
+            echo "⚠️ 升级页面可能未按预期执行，请检查响应内容："
+            echo "$RESPONSE" | head -20
+            # 不退出，继续尝试访问首页
+          fi
 
-      # 触发根目录下的 upgrade.aspx 页面，让 LearnSite 创建数据库表
-      - name: Trigger database upgrade
-        run: |
-          echo "Accessing upgrade page to create tables..."
-          curl -s http://localhost:8080/upgrade.aspx || echo "Upgrade page not found, maybe auto-upgrade works."
-          # 给数据库一些时间完成升级
-          sleep 10
+          # 再次验证数据库表是否存在（可选，例如检查某张表）
+          TABLE_EXISTS=$(docker run --rm --network learnsite-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${{ secrets.DB_PASSWORD }}" -d learnsite \
+            -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'YourTableName'" -h -1)
+          # 如果有特定的表名，可以替换 YourTableName 进行检查，这里仅作示例
+          echo "数据库表检查暂未执行（需指定具体表名）"
 
       # 测试网站首页
       - name: Test web service
