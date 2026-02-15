@@ -14,8 +14,8 @@ services:
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
-      # ↓↓↓ 必须修改为你的强密码，与 MSSQL_SA_PASSWORD 一致 ↓↓↓
-      - DB_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      # 数据库密码从环境变量读取（需在运行前设置）
+      - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
     networks:
       - learnsite-net
@@ -30,8 +30,8 @@ services:
     container_name: mssql-ci
     environment:
       - ACCEPT_EULA=Y
-      # ↓↓↓ 必须修改为强密码，与 DB_PASSWORD 一致 ↓↓↓
-      - MSSQL_SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
+      # SA 密码从环境变量读取（需与 DB_PASSWORD 一致）
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
       - MSSQL_PID=Express
     ports:
       - "1433:1433"
@@ -47,7 +47,7 @@ services:
       start_period: 30s
     restart: "no"
 
-  # 数据库初始化服务（CI 中直接从 URL 下载 SQL 文件）
+  # 数据库初始化服务（直接从 URL 下载 SQL 文件）
   mssql-init:
     image: mcr.microsoft.com/mssql-tools:latest
     container_name: mssql-init
@@ -55,9 +55,9 @@ services:
       mssql:
         condition: service_healthy
     environment:
-      # ↓↓↓ 必须与 MSSQL_SA_PASSWORD 一致 ↓↓↓
-      - SA_PASSWORD=LearnSite2025StrongPwd   # 【必须修改】
-      # 数据库主机地址（默认为服务名 mssql，如果连不上可改为 172.17.0.1 或宿主机 IP）
+      # SA 密码从环境变量读取（与 MSSQL_SA_PASSWORD 一致）
+      - SA_PASSWORD=${SA_PASSWORD}
+      # 数据库主机地址（默认 mssql，可覆盖，如连不上可改为 172.17.0.1 或宿主机 IP）
       - DB_HOST=mssql
     networks:
       - learnsite-net
