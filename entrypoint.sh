@@ -58,7 +58,7 @@ clone_with_retry() {
     return 1
 }
 
-# 函数：拉取最新更新（git pull）
+# 函数：拉取最新更新（git pull），若因历史无关失败则强制重置
 update_repo() {
     cd "${APP_DIR}"
     if git pull --depth 1 origin; then
@@ -69,8 +69,15 @@ update_repo() {
         if git pull --depth 1 origin; then
             echo "✓ Repository updated from fallback."
         else
-            echo "❌ Failed to pull from fallback."
-            return 1
+            # 如果因为历史无关导致失败，尝试强制重置
+            echo "⚠️ Pull failed, possibly due to unrelated histories. Fetching and resetting to origin/HEAD..."
+            if git fetch origin; then
+                git reset --hard origin/HEAD
+                echo "✓ Repository reset to origin/HEAD."
+            else
+                echo "❌ Failed to pull from fallback."
+                return 1
+            fi
         fi
     fi
     cd - >/dev/null
@@ -132,9 +139,12 @@ elif [ "${AUTO_UPDATE}" = "true" ]; then
         REMOTE_COMMIT=$(git ls-remote "${PRIMARY_REPO_URL}" HEAD | cut -f1)
         if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
             echo "New commits detected. Pulling..."
-            update_repo
-            mkdir -p "${STATE_DIR}"
-            git rev-parse HEAD > "${LAST_COMMIT_FILE}"
+            if update_repo; then
+                git rev-parse HEAD > "${LAST_COMMIT_FILE}"
+            else
+                echo "❌ Failed to update repository."
+                exit 1
+            fi
         else
             echo "✓ Repository already up-to-date."
         fi
