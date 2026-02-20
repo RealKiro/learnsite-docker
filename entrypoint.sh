@@ -1,17 +1,17 @@
 #!/bin/bash
 set -e
 
-# ========== 可被环境变量覆盖的默认配置 ==========
-# 主要仓库地址（默认 GitHub）
-: "${PRIMARY_REPO_URL:=https://github.com/RealKiro/learnsite.git}"
-# 备用仓库地址（默认 Gitee）
-: "${FALLBACK_REPO_URL:=https://gitee.com/realiy/learnsite.git}"
-# SQL 文件主要下载链接（默认 GitHub Raw）
-: "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
-# SQL 文件备用下载链接（默认 Gitee Raw）
-: "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
+# 将所有输出重定向到控制台（便于 Docker 日志捕获）
+exec > /proc/1/fd/1 2>&1
 
-# 克隆重试次数（也可通过环境变量覆盖）
+# ========== 解决 Git 所有权问题 ==========
+if command -v git >/dev/null 2>&1; then
+    git config --global --add safe.directory /app 2>/dev/null || true
+fi
+
+# ========== 配置区域（可被环境变量覆盖）==========
+: "${PRIMARY_REPO_URL:=https://gitee.com/realiy/learnsite.git}"
+: "${FALLBACK_REPO_URL:=https://github.com/RealKiro/learnsite.git}"
 : "${CLONE_RETRIES:=3}"
 : "${RETRY_INTERVAL:=5}"
 
@@ -22,7 +22,6 @@ MARKER_FILE="${APP_DIR}/.initialized"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
 DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
 
-# 环境变量控制：是否每次启动都检查更新（默认 false）
 AUTO_UPDATE=${AUTO_UPDATE_SOURCE:-false}
 # ==============================================
 
@@ -147,7 +146,7 @@ else
     echo "⏭️ Marker exists and auto update disabled. Skipping source update."
 fi
 
-# ========== 确保 learnsite.sql 存在（如果缺失则从备用链接下载）==========
+# ========== 确保 learnsite.sql 存在 ==========
 mkdir -p "${APP_DIR}/sql"
 if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
     echo "⚠️ learnsite.sql not found. Attempting to download..."
@@ -187,4 +186,5 @@ fi
 echo "========================================="
 echo "Starting web server..."
 echo "========================================="
+
 exec "$@"
