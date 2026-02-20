@@ -1,15 +1,12 @@
 #!/bin/bash
 set -e
 
-# 将所有输出重定向到控制台（便于 Docker 日志捕获）
 exec > /proc/1/fd/1 2>&1
 
-# ========== 解决 Git 所有权问题 ==========
 if command -v git >/dev/null 2>&1; then
     git config --global --add safe.directory /app 2>/dev/null || true
 fi
 
-# ========== 配置区域（可被环境变量覆盖）==========
 : "${PRIMARY_REPO_URL:=https://gitee.com/realiy/learnsite.git}"
 : "${FALLBACK_REPO_URL:=https://github.com/RealKiro/learnsite.git}"
 : "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
@@ -25,7 +22,6 @@ TARGET_WEB_CONFIG="${APP_DIR}/web.config"
 DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
 
 AUTO_UPDATE=${AUTO_UPDATE_SOURCE:-false}
-# ==============================================
 
 echo "========================================="
 echo "Starting LearnSite (test mode - runtime source fetch with retry)"
@@ -36,7 +32,6 @@ echo "========================================="
 
 mkdir -p "${STATE_DIR}"
 
-# 函数：带重试的克隆操作
 clone_with_retry() {
     local repo_url=$1
     local target=$2
@@ -60,24 +55,23 @@ clone_with_retry() {
     return 1
 }
 
-# 函数：拉取最新更新，若因历史无关失败则强制重置
 update_repo() {
     cd "${APP_DIR}"
-    if git pull --depth 1 origin; then
+    if git pull --depth 1 origin 2>/dev/null; then
         echo "✓ Repository updated via git pull."
     else
-        echo "⚠️ git pull failed, trying fallback remote..."
-        git remote set-url origin "${FALLBACK_REPO_URL}"
-        if git pull --depth 1 origin; then
-            echo "✓ Repository updated from fallback."
+        echo "⚠️ git pull failed, trying to fetch and reset from primary..."
+        if git fetch origin --depth 1; then
+            git reset --hard origin/HEAD
+            echo "✓ Repository reset to origin/HEAD from primary."
         else
-            # 如果因为历史无关导致失败，尝试强制重置
-            echo "⚠️ Pull failed, possibly due to unrelated histories. Fetching and resetting to origin/HEAD..."
-            if git fetch origin; then
+            echo "⚠️ Fetch from primary failed, trying fallback remote..."
+            git remote set-url origin "${FALLBACK_REPO_URL}"
+            if git fetch origin --depth 1; then
                 git reset --hard origin/HEAD
-                echo "✓ Repository reset to origin/HEAD."
+                echo "✓ Repository reset to origin/HEAD from fallback."
             else
-                echo "❌ Failed to pull from fallback."
+                echo "❌ Failed to update from both remotes."
                 return 1
             fi
         fi
@@ -85,20 +79,15 @@ update_repo() {
     cd - >/dev/null
 }
 
-# 判断是否需要获取/更新源码
 if [ ! -f "${MARKER_FILE}" ]; then
     echo "🚀 First run (marker not found). Forcing clean clone regardless of existing files..."
-
-    # 强制清空 /app 目录内容（但保留挂载点）
     echo "Cleaning up /app directory..."
     find "${APP_DIR}" -mindepth 1 -delete 2>/dev/null || true
 
-    # 备份状态目录（避免被克隆覆盖）
     if [ -d "${STATE_DIR}" ]; then
         cp -r "${STATE_DIR}" /tmp/state-backup
     fi
 
-    # 执行带重试的克隆：先尝试主仓库，失败则尝试备用
     CLONE_SUCCESS=false
     if clone_with_retry "${PRIMARY_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
         CLONE_SUCCESS=true
@@ -112,12 +101,10 @@ if [ ! -f "${MARKER_FILE}" ]; then
     fi
 
     if [ "$CLONE_SUCCESS" = false ]; then
-        echo "❌ ERROR: Both primary and fallback repositories failed to clone after multiple attempts."
-        echo "Container will exit. Please check network connectivity or repository URLs."
+        echo "❌ ERROR: Both primary and fallback repositories failed to clone."
         exit 1
     fi
 
-    # 恢复状态目录（若无备份则创建）
     if [ -d "/tmp/state-backup" ]; then
         rm -rf "${STATE_DIR}" 2>/dev/null || true
         mv /tmp/state-backup "${STATE_DIR}"
@@ -125,11 +112,8 @@ if [ ! -f "${MARKER_FILE}" ]; then
         mkdir -p "${STATE_DIR}"
     fi
 
-    # 记录当前 commit
     git --git-dir="${APP_DIR}/.git" rev-parse HEAD > "${LAST_COMMIT_FILE}"
     echo "✓ Initial source cloned."
-
-    # 创建标记文件（仅在克隆成功后创建）
     touch "${MARKER_FILE}"
     echo "✓ Marker file created."
 
@@ -158,7 +142,6 @@ else
     echo "⏭️ Marker exists and auto update disabled. Skipping source update."
 fi
 
-# ========== 确保 learnsite.sql 存在 ==========
 mkdir -p "${APP_DIR}/sql"
 if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
     echo "⚠️ learnsite.sql not found. Attempting to download..."
@@ -176,7 +159,6 @@ else
     echo "✓ learnsite.sql already exists."
 fi
 
-# ========== 应用自定义 web.config 模板 ==========
 if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
     echo "Applying custom web.config template..."
     cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
@@ -186,7 +168,6 @@ else
     exit 1
 fi
 
-# ========== 使用 envsubst 替换环境变量占位符 ==========
 if command -v envsubst >/dev/null 2>&1; then
     echo "Applying environment variables to web.config..."
     envsubst < "${TARGET_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}.tmp" && mv "${TARGET_WEB_CONFIG}.tmp" "${TARGET_WEB_CONFIG}"
