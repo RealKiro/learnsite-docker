@@ -62,7 +62,7 @@ jobs:
       # 8. 使用 Mint 对镜像进行瘦身，生成 dev 标签
       - name: Slim the image with Mint
         run: |
-          # 生成瘦身后镜像，直接打上 dev 标签（参数与原 slim 兼容）
+          # 生成瘦身后镜像，直接打上 dev 标签
           mint build \
             --http-probe=false \
             --tag orzg/learnsite-web:dev \
@@ -86,14 +86,28 @@ jobs:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # 数据库密码，从 Secrets 读取
         run: |
           # 同时设置两个密码变量（值相同）
-          MSSQL_SA_PASSWORD="$DB_PASSWORD" \
-          DB_PASSWORD="$DB_PASSWORD" \
+          export MSSQL_SA_PASSWORD="$DB_PASSWORD"
+          export DB_PASSWORD="$DB_PASSWORD"
           docker compose -f docker-compose.ci.yml up -d
-          # 等待服务启动
-          sleep 15
+          # 等待服务启动（增加等待时间）
+          echo "Waiting 30 seconds for services to start..."
+          sleep 30
+          # 检查容器状态
+          echo "Container status:"
+          docker ps -a
+          # 输出 learnsite 容器日志（用于调试）
+          echo "===== learnsite logs ====="
+          docker logs learnsite-ci || true
+          echo "===== mssql logs ====="
+          docker logs mssql-ci || true
           # 测试首页
-          curl -f http://localhost:8080 || exit 1
-          # 可选：添加更多测试，如 /upgrade.aspx
+          echo "Testing web service..."
+          if curl -f http://localhost:8080; then
+            echo "✅ Web test passed"
+          else
+            echo "❌ Web test failed, check logs above"
+            exit 1
+          fi
           # 清理测试环境
           docker compose -f docker-compose.ci.yml down
 
