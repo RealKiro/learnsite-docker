@@ -72,12 +72,22 @@ jobs:
       - name: Tag dev as latest for testing
         run: docker tag orzg/learnsite-web:dev orzg/learnsite-web:latest
 
-      # 10. 运行集成测试（依赖 docker-compose.ci.yml）
+      # 10. 将测试用的 Compose 文件复制到工作目录
+      - name: Copy test compose file
+        run: cp my-repo/docker-compose.ci.yml .
+
+      # 11. 拉取 MSSQL 镜像（确保存在，通常由 build-mssql-image.yml 推送）
+      - name: Pull MSSQL image
+        run: docker pull orzg/mssql-learnsite:latest
+
+      # 12. 运行集成测试（依赖 docker-compose.ci.yml）
       - name: Run integration tests
         env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # 数据库密码，如果测试需要
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}   # 数据库密码，从 Secrets 读取
         run: |
-          # 启动测试环境（使用刚构建的 latest 镜像）
+          # 同时设置两个密码变量（值相同）
+          MSSQL_SA_PASSWORD="$DB_PASSWORD" \
+          DB_PASSWORD="$DB_PASSWORD" \
           docker compose -f docker-compose.ci.yml up -d
           # 等待服务启动
           sleep 15
@@ -87,11 +97,11 @@ jobs:
           # 清理测试环境
           docker compose -f docker-compose.ci.yml down
 
-      # 11. 推送 dev 镜像到 Docker Hub（只有测试通过才会推送）
+      # 13. 推送 dev 镜像到 Docker Hub（只有测试通过才会推送）
       - name: Push dev image
         run: docker push orzg/learnsite-web:dev
 
-      # 12. 清理中间镜像和临时标签
+      # 14. 清理中间镜像和临时标签
       - name: Clean up
         if: always()
         run: |
