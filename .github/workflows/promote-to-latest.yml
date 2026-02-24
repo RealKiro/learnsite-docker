@@ -1,0 +1,29 @@
+name: Promote dev to latest
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: '源镜像标签 (默认 dev)'
+        required: false
+        default: 'dev'
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Pull source image
+        run: docker pull orzg/learnsite-web:${{ github.event.inputs.source_tag }}
+
+      - name: Tag as latest
+        run: docker tag orzg/learnsite-web:${{ github.event.inputs.source_tag }} orzg/learnsite-web:latest
+
+      - name: Push latest
+        run: docker push orzg/learnsite-web:latest
