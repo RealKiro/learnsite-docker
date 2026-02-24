@@ -20,10 +20,10 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Pull source image
-        run: docker pull orzg/learnsite-web:${{ github.event.inputs.source_tag }}
+        run: docker pull ${{ secrets.DOCKER_USERNAME }}/learnsite-web:${{ github.event.inputs.source_tag }}
 
       - name: Tag as latest
-        run: docker tag orzg/learnsite-web:${{ github.event.inputs.source_tag }} orzg/learnsite-web:latest
+        run: docker tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:${{ github.event.inputs.source_tag }} ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest
 
       - name: Push latest
-        run: docker push orzg/learnsite-web:latest
+        run: docker push ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest

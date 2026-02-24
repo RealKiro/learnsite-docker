@@ -19,14 +19,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 登录 Docker Hub（需在 GitHub Secrets 中配置 DOCKER_USERNAME 和 DOCKER_PASSWORD）
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 构建并推送镜像（镜像名为 orzg/mssql-learnsite，客户可根据需要修改）
       - name: Build and push MSSQL image
         uses: docker/build-push-action@v5
         with:
@@ -34,8 +32,8 @@ jobs:
           file: ./mssql-dockerfile/Dockerfile
           push: true
           tags: |
-            orzg/mssql-learnsite:latest
-            orzg/mssql-learnsite:${{ github.sha }}
+            ${{ secrets.DOCKER_USERNAME }}/mssql-learnsite:latest
+            ${{ secrets.DOCKER_USERNAME }}/mssql-learnsite:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
