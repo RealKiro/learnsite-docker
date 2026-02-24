@@ -45,17 +45,17 @@ jobs:
           load: true                     # 仅保存到本地，不推送到仓库
           tags: orzg/learnsite-web:build-${{ github.sha }}
 
-      # 6. 安装 SlimToolkit (docker-slim)
-      - name: Install SlimToolkit
+      # 6. 安装 SlimToolkit（新项目名为 mint，命令为 mint）
+      - name: Install Mint (SlimToolkit)
         run: |
           curl -sL https://raw.githubusercontent.com/mintoolkit/mint/master/scripts/install-mint.sh | sudo -E bash -
-          slim --version
+          mint --version
 
-      # 7. 使用 SlimToolkit 对镜像进行瘦身，生成 dev 标签
-      - name: Slim the image
+      # 7. 使用 Mint 对镜像进行瘦身，生成 dev 标签
+      - name: Slim the image with Mint
         run: |
-          # 生成瘦身后镜像，直接打上 dev 标签
-          slim build \
+          # 生成瘦身后镜像，直接打上 dev 标签（参数与原 slim 兼容）
+          mint build \
             --http-probe=false \
             --tag orzg/learnsite-web:dev \
             orzg/learnsite-web:build-${{ github.sha }}
