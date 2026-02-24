@@ -59,13 +59,12 @@ jobs:
           curl -sL https://raw.githubusercontent.com/mintoolkit/mint/master/scripts/install-mint.sh | sudo -E bash -
           mint --version
 
-      # 8. 使用 Mint 对镜像进行瘦身，开启 HTTP 探测以自动保留运行时依赖
+      # 8. 使用 Mint 对镜像进行瘦身，开启 HTTP 探测并指定探测命令
       - name: Slim the image with Mint (with http probe)
         run: |
-          # 通过 HTTP 探测访问首页，让 mint 自动检测实际使用的文件和库
           mint build \
             --http-probe \
-            --http-probe-cmd "http://localhost:8080" \
+            --http-probe-cmd "curl --fail http://localhost:8080" \
             --tag orzg/learnsite-web:dev \
             orzg/learnsite-web:build-${{ github.sha }}
 
