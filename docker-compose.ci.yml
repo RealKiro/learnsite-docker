@@ -33,6 +33,9 @@ services:
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
+      # 设置源码仓库地址，优先使用 GitHub（更稳定），Gitee 作为备用
+      - PRIMARY_REPO_URL=https://github.com/RealKiro/learnsite.git
+      - FALLBACK_REPO_URL=https://gitee.com/realiy/learnsite.git
     networks:
       - learnsite-net
     restart: "no"
