@@ -59,15 +59,13 @@ jobs:
           curl -sL https://raw.githubusercontent.com/mintoolkit/mint/master/scripts/install-mint.sh | sudo -E bash -
           mint --version
 
-      # 8. 使用 Mint 对镜像进行瘦身，并保留关键系统库（防止 bash 缺失 libtinfo）
-      - name: Slim the image with Mint
+      # 8. 使用 Mint 对镜像进行瘦身，开启 HTTP 探测以自动保留运行时依赖
+      - name: Slim the image with Mint (with http probe)
         run: |
-          # 强制保留 /bin 和 /lib 目录，确保 bash 及其依赖库不被删除
+          # 通过 HTTP 探测访问首页，让 mint 自动检测实际使用的文件和库
           mint build \
-            --http-probe=false \
-            --include-path /bin \
-            --include-path /lib \
-            --include-path /usr/lib \
+            --http-probe \
+            --http-probe-cmd "http://localhost:8080" \
             --tag orzg/learnsite-web:dev \
             orzg/learnsite-web:build-${{ github.sha }}
 
@@ -93,8 +91,13 @@ jobs:
           docker compose -f docker-compose.ci.yml up -d
           echo "Waiting 30 seconds for services to start..."
           sleep 30
-          # 测试首页
-          curl -f --retry 5 --retry-delay 5 http://localhost:8080 || exit 1
+          # 测试首页，若失败则输出 learnsite 容器日志
+          if ! curl -f --retry 5 --retry-delay 5 http://localhost:8080; then
+            echo "❌ Web test failed. Dumping learnsite container logs:"
+            docker logs learnsite-ci
+            exit 1
+          fi
+          echo "✅ Web service responded successfully."
           # 清理测试环境
           docker compose -f docker-compose.ci.yml down
 
