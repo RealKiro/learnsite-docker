@@ -37,6 +37,6 @@ services:
       # - MSSQL_PID=Developer
 
       # SQL 文件下载地址（可选，如不设置则使用镜像内的默认值）
-      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
-      - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
+      - PRIMARY_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
+      - FALLBACK_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
     restart: unless-stopped
