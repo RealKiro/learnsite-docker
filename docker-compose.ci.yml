@@ -5,6 +5,8 @@ services:
   mssql:
     image: orzg/mssql-learnsite:latest
     container_name: mssql-ci
+    # 【新增】设置工作目录为数据卷挂载点，避免权限错误
+    working_dir: /var/opt/mssql
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
@@ -33,7 +35,6 @@ services:
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
-      # 设置源码仓库地址，优先使用 GitHub（更稳定），Gitee 作为备用
       - PRIMARY_REPO_URL=https://github.com/RealKiro/learnsite.git
       - FALLBACK_REPO_URL=https://gitee.com/realiy/learnsite.git
     networks:

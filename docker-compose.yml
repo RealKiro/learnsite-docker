@@ -5,6 +5,7 @@ services:
   mssql:
     image: orzg/mssql-learnsite:latest   # CI 会自动构建并推送基于 2019 的 latest
     container_name: mssql
+    working_dir: /var/opt/mssql
     environment:
       - ACCEPT_EULA=Y
       # ↓↓↓ 【必须修改】请设置一个强密码（至少8位，含大小写字母、数字和特殊字符）↓↓↓

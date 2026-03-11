@@ -4,13 +4,18 @@ set -e
 # 将所有输出重定向到控制台（便于 Docker 日志捕获）
 exec > /proc/1/fd/1 2>&1
 
+# ========== 新增：切换到持久化数据目录 ==========
+# 确保工作目录为 /var/opt/mssql，避免在根目录创建 .system 等临时文件
+cd /var/opt/mssql || exit 1
+# ===============================================
+
 # ========== 环境变量默认值（可通过 docker-compose 覆盖）==========
 : "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
 : "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
 
 INIT_MARKER="/var/opt/mssql/db_initialized"          # 标记文件，防止重复初始化
 SQL_SCRIPT="/tmp/learnsite.sql"                       # 临时 SQL 文件路径
-SQLCMD="/opt/mssql-tools/bin/sqlcmd"                  # Azure SQL Edge 的 sqlcmd 路径
+SQLCMD="/opt/mssql-tools/bin/sqlcmd"                   # Azure SQL Edge 的 sqlcmd 路径
 
 echo "🚀 Starting SQL Server..."
 /opt/mssql/bin/sqlservr &
