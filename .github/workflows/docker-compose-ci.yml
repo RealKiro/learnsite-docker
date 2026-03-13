@@ -1,0 +1,70 @@
+name: Docker Compose CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 启动所有服务（后台）
+      - name: Build and start services
+        run: docker compose up -d --build
+        env:
+          MSSQL_SA_PASSWORD: LearnSite!2025StrongPwd
+
+      # 显示容器状态（不依赖 bash）
+      - name: Show container status
+        run: |
+          docker compose ps
+          # 如果 web 容器未运行，直接失败
+          if ! docker compose ps --status running | grep web; then
+            echo "❌ Web container is not running!"
+            exit 1
+          fi
+
+      # 等待 Web 服务就绪（在容器内执行 curl）
+      - name: Wait for web service inside container
+        run: |
+          echo "⏳ Waiting for web service inside container..."
+          timeout 120s sh -c '
+            until docker compose exec -T web curl -s --fail http://localhost:8080; do
+              echo "   Still waiting... (container status below)"
+              docker compose ps web
+              echo ""
+              sleep 5
+            done
+          '
+          echo "✅ Web service is ready!"
+
+      # 核心测试：在容器内访问 Web 服务
+      - name: Test web service (inside container)
+        run: |
+          docker compose exec -T web curl -v --fail http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
+
+      # 可选：数据库连接测试（同样在容器内）
+      - name: Test database connectivity
+        run: |
+          echo "🔍 Checking SQL Server connection..."
+          sleep 20
+          docker compose exec -T db /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "LearnSite!2025StrongPwd" \
+            -C -Q "SELECT @@VERSION" \
+            && echo "✅ Database connection successful" \
+            || echo "⚠️ Warning: Database not ready, continuing"
+        continue-on-error: true
+
+      # 清理资源
+      - name: Stop and clean up
+        if: always()
+        run: docker compose down -v
