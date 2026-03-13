@@ -27,7 +27,6 @@ else
 fi
 
 # 关键步骤：将整个数据目录的权限更改为新创建的用户
-# 这解决了即使宿主机目录权限不对，容器启动时也能自动修复
 echo "--- 调整 /var/opt/mssql 目录的所有权为 $PUID:$PGID ---"
 chown -R $PUID:$PGID /var/opt/mssql
 

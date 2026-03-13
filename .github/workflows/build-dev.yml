@@ -1,50 +1,39 @@
-name: Build Dev Image with SlimToolkit
+name: Build Dev Image (Mono)
 
 on:
   push:
-    branches: [ main, master ]          # 每次推送到 main/master 时自动构建 dev
-  workflow_dispatch:                     # 也支持手动触发
+    branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   build-dev:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. 检出当前仓库（包含自定义配置）
       - name: Checkout config repo
         uses: actions/checkout@v4
         with:
           path: my-repo
 
-      # 2. 从 GitHub 拉取 LearnSite 源码（固定 main 分支）
       - name: Clone source from GitHub
         run: |
-          echo "Cloning from https://github.com/RealKiro/learnsite.git (main branch)..."
           git clone --depth 1 --branch main https://github.com/RealKiro/learnsite.git app-source
 
-      # 3. 用仓库中的自定义配置覆盖源码中的对应文件
       - name: Replace with custom configs
         run: |
-          cp my-repo/web.config app-source/ 2>/dev/null || echo "⚠️ Warning: web.config not found in my-repo, using default from source."
-          cp my-repo/Dockerfile app-source/ || echo "⚠️ Warning: Dockerfile not found in my-repo, using default from source."
-          cp my-repo/entrypoint.sh app-source/ || echo "⚠️ Warning: entrypoint.sh not found in my-repo, using default from source."
+          cp my-repo/web.config app-source/ 2>/dev/null || echo "⚠️ web.config not found"
+          cp my-repo/Dockerfile app-source/ || echo "⚠️ Dockerfile not found"
+          cp my-repo/entrypoint.sh app-source/ || echo "⚠️ entrypoint.sh not found"
 
-      # 4. 登录 Docker Hub（需提前在 Secrets 中配置 DOCKER_USERNAME 和 DOCKER_PASSWORD）
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      # 5. 显式拉取基础镜像（带重试）
-      - name: Pull base image with retry
-        run: |
-          for i in {1..3}; do
-            echo "Attempt $i to pull mono:latest..."
-            docker pull mono:latest && break || { echo "Pull failed, retry in 10s"; sleep 10; }
-          done
+      - name: Pull base image (mono)
+        run: docker pull mono:latest
 
-      # 6. 构建原始镜像（中间产物），使用 secrets.DOCKER_USERNAME 打标签
       - name: Build original image
         uses: docker/build-push-action@v5
         with:
@@ -53,59 +42,16 @@ jobs:
           load: true
           tags: ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }}
 
-      # 7. 安装 Mint (SlimToolkit)
-      - name: Install Mint (SlimToolkit)
-        run: |
-          curl -sL https://raw.githubusercontent.com/mintoolkit/mint/master/scripts/install-mint.sh | sudo -E bash -
-          mint --version
+      # 可选：如果需要对镜像瘦身，可在此安装 mint 并进行 slim，当前保持原样
+      - name: Tag as dev
+        run: docker tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }} ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev
 
-      # 8. 使用 Mint 对镜像进行瘦身，生成 dev 标签（也使用 secrets.DOCKER_USERNAME）
-      - name: Slim the image with Mint
-        run: |
-          mint build \
-            --http-probe=false \
-            --tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev \
-            ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }}
-
-      # 9. 为了测试，将 dev 镜像临时标记为 latest（方便测试环境使用）
-      - name: Tag dev as latest for testing
-        run: docker tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest
-
-      # 10. 将测试用的 Compose 文件复制到工作目录
-      - name: Copy test compose file
-        run: cp my-repo/docker-compose.ci.yml .
-
-      # 11. 拉取 MSSQL 镜像（确保存在，使用 secrets.DOCKER_USERNAME）
-      - name: Pull MSSQL image
-        run: docker pull ${{ secrets.DOCKER_USERNAME }}/mssql-learnsite:latest
-
-      # 12. 运行集成测试（传递环境变量 DOCKER_USERNAME 供 compose 替换）
-      - name: Run integration tests
-        env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-        run: |
-          MSSQL_SA_PASSWORD="$DB_PASSWORD" \
-          DB_PASSWORD="$DB_PASSWORD" \
-          docker compose -f docker-compose.ci.yml up -d
-          echo "Waiting 30 seconds for services to start..."
-          sleep 30
-          if ! curl -f --retry 5 --retry-delay 5 http://localhost:8080; then
-            echo "❌ Web test failed. Dumping learnsite container logs:"
-            docker logs learnsite-ci
-            exit 1
-          fi
-          echo "✅ Web service responded successfully."
-          docker compose -f docker-compose.ci.yml down
-
-      # 13. 推送 dev 镜像到 Docker Hub（测试通过后）
+      # 推送 dev 镜像
       - name: Push dev image
         run: docker push ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev
 
-      # 14. 清理中间镜像和临时标签
       - name: Clean up
         if: always()
         run: |
           docker rmi ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }} || true
-          docker rmi ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest || true
           docker image prune -f

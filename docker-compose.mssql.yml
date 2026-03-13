@@ -2,33 +2,42 @@ version: '3.8'
 
 services:
   mssql:
-    # 镜像名：请将 orzg 替换为您的 Docker Hub 用户名
+    # 【必改】镜像名：请将 orzg 替换为您的 Docker Hub 用户名（如果使用自定义镜像）
+    # 例如：your-dockerhub-username/mssql-learnsite:latest
     image: orzg/mssql-learnsite:latest
-    container_name: mssql
+    container_name: mssql  # 容器名称，可自定义
 
     # ===== 网络模式选择 =====
-    # 必须与 learnsite 服务的网络模式保持一致
-    # 默认使用 host 模式，如需 bridge 模式，请取消下面 network_mode 行的注释，并注释掉 host 行。
-    network_mode: host
+    # 必须与 learnsite 服务的网络模式保持一致。
+    # 默认使用 host 模式（容器直接使用宿主机网络，性能好且无需端口映射）。
+    # 如需 bridge 模式（容器间通过虚拟网络通信），请将 network_mode 改为 bridge，
+    # 并取消下面 ports 部分的注释，将容器端口映射到宿主机。
+    network_mode: host   # 使用宿主机网络
     # network_mode: bridge
     # ports:
-    #   - "1433:1433"                # bridge 模式下需取消注释并映射端口
+    #   - "1433:1433"    # 桥接模式下将容器的 1433 端口映射到宿主机相同端口
 
     volumes:
-      # 数据库文件持久化：使用相对路径，所有数据保存在当前目录的 data 子目录中
+      # 【可选修改】数据库文件持久化路径（宿主机目录:容器内目录）
+      # 使用相对路径 ./data，所有数据库文件将保存在当前目录的 data 子目录中
       - ./data:/var/opt/mssql
 
     environment:
+      # 接受 Microsoft SQL Server 许可协议（必须为 Y）
       - ACCEPT_EULA=Y
+
       # ↓↓↓ 【必须修改】请设置与 learnsite 服务中 DB_PASSWORD 相同的强密码 ↓↓↓
+      # 密码必须包含大小写字母、数字和特殊符号，例如 YourStrong!Password123
       - MSSQL_SA_PASSWORD=YourStrong!Password123
 
       # PUID 和 PGID：用于自动修复宿主机 data 目录的权限
-      # 默认值 1000 通常为第一个普通用户的 UID/GID，您可以根据实际情况修改
+      # 默认值 1000 通常为 Linux 系统第一个普通用户的 UID/GID，您可以根据宿主机实际情况修改
       - PUID=1000
       - PGID=1000
 
-      # SQL 文件下载地址（可选，如不设置则使用镜像内的默认值）
+      # SQL 初始化文件下载地址（可选，如不设置则使用镜像内的默认值）
+      # 主地址和备用地址，当主地址下载失败时会自动尝试备用地址
       - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
       - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
-    restart: unless-stopped
+
+    restart: unless-stopped   # 容器退出时自动重启，除非手动停止

@@ -2,33 +2,40 @@ version: '3.8'
 
 services:
   learnsite:
-    # 镜像名：请将 orzg 替换为您的 Docker Hub 用户名
+    # 【必改】镜像名：请将 orzg 替换为您的 Docker Hub 用户名
+    # 例如：your-dockerhub-username/learnsite-web:latest
     image: orzg/learnsite-web:latest
-    container_name: learnsite
+    container_name: learnsite  # 容器名称，可自定义
 
     # ===== 网络模式选择 =====
-    # 默认使用 host 模式，如需 bridge 模式，请取消下面 network_mode 行的注释，并注释掉 host 行。
-    network_mode: host
+    # 必须与 MSSQL 服务的网络模式保持一致。
+    # 默认使用 host 模式；如果使用 bridge 模式，请将 network_mode 改为 bridge，
+    # 并取消下面 ports 部分的注释，将容器端口映射到宿主机。
+    network_mode: host   # 使用宿主机网络
     # network_mode: bridge
     # ports:
-    #   - "8080:8080"                # bridge 模式下需取消注释并映射端口
+    #   - "8080:8080"    # 桥接模式下将容器的 8080 端口映射到宿主机
 
     volumes:
-      # 源码和状态持久化：使用相对路径，所有数据保存在当前目录的 app 子目录中
+      # 【可选修改】源码和状态持久化路径（宿主机目录:容器内目录）
+      # 使用相对路径 ./app，所有应用数据将保存在当前目录的 app 子目录中
       - ./app:/app
 
     environment:
-      - MONO_IOMAP=all
-      # 数据库主机地址：统一使用 Docker 默认网关 172.17.0.1
-      # 无论 host 还是 bridge 模式，只要 MSSQL 容器端口映射正确，此地址均可访问
-      - DB_HOST=172.17.0.1
-      - DB_NAME=learnsite
-      - DB_USER=sa
+      - MONO_IOMAP=all   # Mono 文件映射选项，解决 Windows/Linux 路径兼容问题
+
+      # 数据库连接配置
+      - DB_HOST=172.17.0.1   # 数据库主机地址：使用 Docker 默认网关，无论 host 还是 bridge 模式均可访问
+      - DB_NAME=learnsite     # 数据库名称
+      - DB_USER=sa            # 数据库用户名（默认使用 sa）
+
       # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=YourStrong!Password123
-      - AUTO_UPDATE_SOURCE=false
+
+      - AUTO_UPDATE_SOURCE=false   # 是否自动从 Git 仓库更新源码（true/false）
 
       # 源码仓库地址（可选，如不设置则使用镜像内的默认值）
       - PRIMARY_REPO_URL=https://gitee.com/realiy/learnsite.git
       - FALLBACK_REPO_URL=https://github.com/RealKiro/learnsite.git
-    restart: unless-stopped
+
+    restart: unless-stopped   # 容器退出时自动重启

@@ -17,30 +17,33 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 启动所有服务（后台）
+      # 启动所有服务（后台），并传递 DOCKER_USERNAME 环境变量
       - name: Build and start services
-        run: docker compose up -d --build
         env:
-          MSSQL_SA_PASSWORD: LearnSite!2025StrongPwd
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          MSSQL_SA_PASSWORD: ${{ secrets.DB_PASSWORD }}   # 请确保 secrets.DB_PASSWORD 已设置
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          docker compose -f docker-compose.ci.yml up -d --build
 
-      # 显示容器状态（不依赖 bash）
+      # 显示容器状态（不使用可能损坏的 bash）
       - name: Show container status
         run: |
-          docker compose ps
+          docker compose -f docker-compose.ci.yml ps
           # 如果 web 容器未运行，直接失败
-          if ! docker compose ps --status running | grep web; then
+          if ! docker compose -f docker-compose.ci.yml ps --status running | grep learnsite-ci; then
             echo "❌ Web container is not running!"
             exit 1
           fi
 
-      # 等待 Web 服务就绪（在容器内执行 curl）
+      # 等待 Web 服务就绪（在容器内执行 curl，镜像需自带 curl）
       - name: Wait for web service inside container
         run: |
           echo "⏳ Waiting for web service inside container..."
           timeout 120s sh -c '
-            until docker compose exec -T web curl -s --fail http://localhost:8080; do
+            until docker compose -f docker-compose.ci.yml exec -T learnsite curl -s --fail http://localhost:8080; do
               echo "   Still waiting... (container status below)"
-              docker compose ps web
+              docker compose -f docker-compose.ci.yml ps learnsite
               echo ""
               sleep 5
             done
@@ -50,15 +53,15 @@ jobs:
       # 核心测试：在容器内访问 Web 服务
       - name: Test web service (inside container)
         run: |
-          docker compose exec -T web curl -v --fail http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
+          docker compose -f docker-compose.ci.yml exec -T learnsite curl -v --fail http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
 
-      # 可选：数据库连接测试（同样在容器内）
+      # 可选：数据库连接测试
       - name: Test database connectivity
         run: |
           echo "🔍 Checking SQL Server connection..."
           sleep 20
-          docker compose exec -T db /opt/mssql-tools18/bin/sqlcmd \
-            -S localhost -U sa -P "LearnSite!2025StrongPwd" \
+          docker compose -f docker-compose.ci.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" \
             -C -Q "SELECT @@VERSION" \
             && echo "✅ Database connection successful" \
             || echo "⚠️ Warning: Database not ready, continuing"
@@ -67,4 +70,4 @@ jobs:
       # 清理资源
       - name: Stop and clean up
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.ci.yml down -v
