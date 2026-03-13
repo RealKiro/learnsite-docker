@@ -1,4 +1,4 @@
-name: Build Dev Image with SlimToolkit
+name: Build Dev Image (without slim)
 
 on:
   push:
@@ -44,47 +44,27 @@ jobs:
             docker pull mono:latest && break || { echo "Pull failed, retry in 10s"; sleep 10; }
           done
 
-      # 6. 构建原始镜像（中间产物），使用 secrets.DOCKER_USERNAME 打标签
-      - name: Build original image
+      # 6. 构建并直接推送 dev 镜像（不进行瘦身）
+      - name: Build and push dev image
         uses: docker/build-push-action@v5
         with:
           context: ./app-source
           file: ./app-source/Dockerfile
-          load: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }}
+          push: true
+          tags: ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
 
-      # 7. 安装 Mint (SlimToolkit) - 直接下载二进制并复制所有文件
-      - name: Install Mint (SlimToolkit) binary
-        run: |
-          MINT_VERSION="1.41.8"
-          wget -O /tmp/mint.tar.gz "https://github.com/mintoolkit/mint/releases/download/${MINT_VERSION}/dist_linux.tar.gz"
-          tar -xzf /tmp/mint.tar.gz -C /tmp
-          # 将解压后的所有文件（包括 mint-sensor）复制到 /usr/local/bin
-          sudo cp -r /tmp/dist_linux/* /usr/local/bin/
-          sudo chmod +x /usr/local/bin/mint /usr/local/bin/mint-sensor
-          mint --version
-
-      # 8. 使用 Mint 对镜像进行瘦身，生成 dev 标签
-      - name: Slim the image with Mint
-        run: |
-          mint build \
-            --http-probe=false \
-            --tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev \
-            ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }}
-
-      # 9. 为了测试，将 dev 镜像临时标记为 latest
-      - name: Tag dev as latest for testing
-        run: docker tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest
-
-      # 10. 将测试用的 Compose 文件复制到工作目录
+      # 7. 将测试用的 Compose 文件复制到工作目录
       - name: Copy test compose file
         run: cp my-repo/docker-compose.ci.yml .
 
-      # 11. 拉取 MSSQL 镜像（确保存在）
+      # 8. 拉取 MSSQL 镜像（确保存在）
       - name: Pull MSSQL image
         run: docker pull ${{ secrets.DOCKER_USERNAME }}/mssql-learnsite:latest
 
-      # 12. 运行集成测试
+      # 9. 运行集成测试
       - name: Run integration tests
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
@@ -102,15 +82,3 @@ jobs:
           fi
           echo "✅ Web service responded successfully."
           docker compose -f docker-compose.ci.yml down
-
-      # 13. 推送 dev 镜像到 Docker Hub（测试通过后）
-      - name: Push dev image
-        run: docker push ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev
-
-      # 14. 清理中间镜像和临时标签
-      - name: Clean up
-        if: always()
-        run: |
-          docker rmi ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }} || true
-          docker rmi ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest || true
-          docker image prune -f
