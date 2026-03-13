@@ -1,42 +1,203 @@
 #!/bin/bash
 set -e
+
+# 将所有输出重定向到控制台
 exec > /proc/1/fd/1 2>&1
 
-# ========== PUID/PGID 权限处理 ==========
-# 从环境变量获取 PUID 和 PGID，如果未设置则使用默认值 1000
-PUID=${PUID:-1000}
-PGID=${PGID:-1000}
-
-# 创建或修改用户和组
-echo "--- Setting up user and group with UID:GID $PUID:$PGID ---"
-# 检查组是否存在，若不存在则创建
-if ! getent group appgroup > /dev/null 2>&1; then
-    groupadd -g $PGID appgroup
-else
-    # 如果组存在但GID不匹配，修改它（简化处理，实际可能需要更复杂的逻辑）
-    groupmod -g $PGID appgroup 2>/dev/null || true
+# ========== 解决 Git 所有权问题 ==========
+if command -v git >/dev/null 2>&1; then
+    git config --global --add safe.directory /app 2>/dev/null || true
 fi
 
-# 检查用户是否存在，若不存在则创建
-if ! getent passwd appuser > /dev/null 2>&1; then
-    useradd -u $PUID -g $PGID -m appuser
+# ========== 配置区域（可被环境变量覆盖）==========
+: "${PRIMARY_REPO_URL:=https://gitee.com/realiy/learnsite.git}"
+: "${FALLBACK_REPO_URL:=https://github.com/RealKiro/learnsite.git}"
+: "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
+: "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
+: "${CLONE_RETRIES:=3}"
+: "${RETRY_INTERVAL:=5}"
+
+APP_DIR="/app"
+STATE_DIR="${APP_DIR}/.state"
+LAST_COMMIT_FILE="${STATE_DIR}/last_commit"
+MARKER_FILE="${APP_DIR}/.initialized"
+TARGET_WEB_CONFIG="${APP_DIR}/web.config"
+DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
+
+AUTO_UPDATE=${AUTO_UPDATE_SOURCE:-false}
+# ==============================================
+
+echo "========================================="
+echo "Starting LearnSite (runtime source fetch mode with retry)"
+echo "Auto update: $AUTO_UPDATE"
+echo "Primary repo: $PRIMARY_REPO_URL"
+echo "Fallback repo: $FALLBACK_REPO_URL"
+echo "========================================="
+
+mkdir -p "${STATE_DIR}"
+
+# 函数：带重试的克隆操作
+clone_with_retry() {
+    local repo_url=$1
+    local target=$2
+    local retries=$3
+    local attempt=1
+    while [ $attempt -le $retries ]; do
+        echo "Attempt $attempt of $retries to clone from $repo_url ..."
+        if git clone --depth 1 "$repo_url" "$target"; then
+            echo "✓ Successfully cloned from $repo_url on attempt $attempt."
+            return 0
+        else
+            echo "⚠️ Clone attempt $attempt failed."
+            if [ $attempt -lt $retries ]; then
+                echo "Retrying in $RETRY_INTERVAL seconds..."
+                sleep $RETRY_INTERVAL
+            fi
+        fi
+        attempt=$((attempt + 1))
+    done
+    echo "❌ Failed to clone from $repo_url after $retries attempts."
+    return 1
+}
+
+# 函数：更新仓库（优先使用 git pull，失败则强制重置）
+update_repo() {
+    cd "${APP_DIR}"
+    # 先尝试普通 git pull
+    if git pull --depth 1 origin 2>/dev/null; then
+        echo "✓ Repository updated via git pull."
+    else
+        echo "⚠️ git pull failed, trying to fetch and reset from primary..."
+        # 尝试从主仓库 fetch 并强制重置
+        if git fetch origin --depth 1; then
+            git reset --hard origin/HEAD
+            echo "✓ Repository reset to origin/HEAD from primary."
+        else
+            echo "⚠️ Fetch from primary failed, trying fallback remote..."
+            git remote set-url origin "${FALLBACK_REPO_URL}"
+            if git fetch origin --depth 1; then
+                git reset --hard origin/HEAD
+                echo "✓ Repository reset to origin/HEAD from fallback."
+            else
+                echo "❌ Failed to update from both remotes."
+                return 1
+            fi
+        fi
+    fi
+    cd - >/dev/null
+}
+
+# 判断是否需要获取/更新源码
+if [ ! -f "${MARKER_FILE}" ]; then
+    echo "🚀 First run (marker not found). Forcing clean clone regardless of existing files..."
+
+    # 强制清空 /app 目录内容（但保留挂载点）
+    echo "Cleaning up /app directory..."
+    find "${APP_DIR}" -mindepth 1 -delete 2>/dev/null || true
+
+    # 备份状态目录
+    if [ -d "${STATE_DIR}" ]; then
+        cp -r "${STATE_DIR}" /tmp/state-backup
+    fi
+
+    # 执行带重试的克隆
+    CLONE_SUCCESS=false
+    if clone_with_retry "${PRIMARY_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
+        CLONE_SUCCESS=true
+        echo "✓ Cloned from primary repository."
+    else
+        echo "⚠️ Primary repository failed after ${CLONE_RETRIES} attempts. Trying fallback repository..."
+        if clone_with_retry "${FALLBACK_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
+            CLONE_SUCCESS=true
+            echo "✓ Cloned from fallback repository."
+        fi
+    fi
+
+    if [ "$CLONE_SUCCESS" = false ]; then
+        echo "❌ ERROR: Both primary and fallback repositories failed to clone after multiple attempts."
+        exit 1
+    fi
+
+    # 恢复状态目录
+    if [ -d "/tmp/state-backup" ]; then
+        rm -rf "${STATE_DIR}" 2>/dev/null || true
+        mv /tmp/state-backup "${STATE_DIR}"
+    else
+        mkdir -p "${STATE_DIR}"
+    fi
+
+    # 记录当前 commit
+    git --git-dir="${APP_DIR}/.git" rev-parse HEAD > "${LAST_COMMIT_FILE}"
+    echo "✓ Initial source cloned."
+
+    # 创建标记文件
+    touch "${MARKER_FILE}"
+    echo "✓ Marker file created."
+
+elif [ "${AUTO_UPDATE}" = "true" ]; then
+    echo "🔄 Auto update enabled. Checking for source updates..."
+    if [ -d "${APP_DIR}/.git" ]; then
+        cd "${APP_DIR}"
+        LOCAL_COMMIT=$(git rev-parse HEAD)
+        REMOTE_COMMIT=$(git ls-remote "${PRIMARY_REPO_URL}" HEAD | cut -f1)
+        if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
+            echo "New commits detected. Pulling..."
+            if update_repo; then
+                git rev-parse HEAD > "${LAST_COMMIT_FILE}"
+            else
+                echo "❌ Failed to update repository."
+                exit 1
+            fi
+        else
+            echo "✓ Repository already up-to-date."
+        fi
+        cd - >/dev/null
+    else
+        echo "⚠️ /app is not a Git repository. Cannot auto-update. Skipping."
+    fi
 else
-    usermod -u $PUID -g $PGID appuser 2>/dev/null || true
+    echo "⏭️ Marker exists and auto update disabled. Skipping source update."
 fi
 
-# 关键步骤：将整个数据目录的权限更改为新创建的用户
-# 这解决了即使目录在宿主机上权限不对，容器启动时也能尝试修复的问题
-echo "--- Adjusting ownership of /var/opt/mssql ---"
-chown -R $PUID:$PGID /var/opt/mssql
+# ========== 确保 learnsite.sql 存在 ==========
+mkdir -p "${APP_DIR}/sql"
+if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
+    echo "⚠️ learnsite.sql not found. Attempting to download..."
+    if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${PRIMARY_SQL_URL}"; then
+        echo "✓ Downloaded from primary URL."
+    else
+        echo "⚠️ Primary download failed, trying fallback..."
+        if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${FALLBACK_SQL_URL}"; then
+            echo "✓ Downloaded from fallback URL."
+        else
+            echo "❌ Failed to download learnsite.sql from both URLs. Database init may fail."
+        fi
+    fi
+else
+    echo "✓ learnsite.sql already exists."
+fi
 
-# 如果还需要其他目录，可以继续添加
-# chown -R $PUID:$PGID /another/path
+# ========== 应用自定义 web.config 模板 ==========
+if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
+    echo "Applying custom web.config template..."
+    cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
+    echo "✓ Custom web.config applied."
+else
+    echo "❌ ERROR: Default web.config not found in image!"
+    exit 1
+fi
 
-# ========== 后续步骤 ==========
-# ... (等待 SQL Server 启动、下载 SQL 文件等逻辑) ...
+# ========== 使用 envsubst 替换环境变量 ==========
+if command -v envsubst >/dev/null 2>&1; then
+    echo "Applying environment variables to web.config..."
+    envsubst < "${TARGET_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}.tmp" && mv "${TARGET_WEB_CONFIG}.tmp" "${TARGET_WEB_CONFIG}"
+    echo "✓ Environment variables applied."
+else
+    echo "⚠️ envsubst not found. Placeholders will remain."
+fi
 
-# 注意：最终必须以非 root 用户运行 SQL Server
-# 使用 gosu 或 su-exec 切换到新用户启动主进程
-# 假设您已经安装了 gosu
-echo "--- Starting SQL Server as appuser (UID: $PUID) ---"
-exec gosu appuser /opt/mssql/bin/sqlservr
+echo "========================================="
+echo "Starting web server..."
+echo "========================================="
+
+exec "$@"

@@ -1,7 +1,8 @@
-# 注意：已删除 version 行，消除 Compose V2 警告
+version: '3.8'
 
 services:
   mssql:
+    # 使用变量 ${DOCKER_USERNAME}，在 CI 中通过环境变量注入实际用户名
     image: ${DOCKER_USERNAME}/mssql-learnsite:latest
     container_name: mssql-ci
     environment:

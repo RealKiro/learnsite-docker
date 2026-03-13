@@ -2,11 +2,9 @@ version: '3.8'
 
 services:
   learnsite:
-    # 【必改】镜像名：请将 orzg 替换为您的 Docker Hub 用户名
     image: orzg/learnsite-web:latest
     container_name: learnsite
 
-    # 网络模式选择（与下方 mssql 保持一致）
     network_mode: host
     # network_mode: bridge
     # ports:
@@ -14,24 +12,21 @@ services:
 
     volumes:
       - ./app:/app
-
     environment:
       - MONO_IOMAP=all
       - DB_HOST=172.17.0.1
       - DB_NAME=learnsite
       - DB_USER=sa
-      # ↓↓↓ 【必须修改】必须与下方 mssql 的 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
+      # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=YourStrong!Password123
       - AUTO_UPDATE_SOURCE=false
       - PRIMARY_REPO_URL=https://gitee.com/realiy/learnsite.git
       - FALLBACK_REPO_URL=https://github.com/RealKiro/learnsite.git
-
     restart: unless-stopped
     depends_on:
-      - mssql   # 确保 mssql 服务先启动
+      - mssql
 
   mssql:
-    # 【必改】镜像名：请将 orzg 替换为您的 Docker Hub 用户名
     image: orzg/mssql-learnsite:latest
     container_name: mssql
 
@@ -42,14 +37,12 @@ services:
 
     volumes:
       - ./data:/var/opt/mssql
-
     environment:
       - ACCEPT_EULA=Y
-      # ↓↓↓ 【必须修改】请设置与上方 learnsite 的 DB_PASSWORD 相同的强密码 ↓↓↓
+      # ↓↓↓ 【必须修改】请设置与 DB_PASSWORD 相同的强密码 ↓↓↓
       - MSSQL_SA_PASSWORD=YourStrong!Password123
-      - PUID=1000          # 宿主机用户 UID，自动修复 data 目录权限
-      - PGID=1000          # 宿主机用户 GID
+      - PUID=1000
+      - PGID=1000
       - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
       - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
-
     restart: unless-stopped

@@ -1,0 +1,11 @@
+.git
+.gitignore
+README.md
+docker-compose*.yml
+.sql
+*.log
+*.bak
+.vscode
+.idea
+__MACOSX
+.DS_Store
