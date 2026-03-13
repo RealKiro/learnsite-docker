@@ -17,26 +17,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 启动服务（显式传递所有必要变量）
-      - name: Build and start services
-        env:
-          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          MSSQL_SA_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      # 调试步骤（可选，验证 Secrets）
+      - name: Debug Secrets
         run: |
+          echo "DOCKER_USERNAME is set: ${{ secrets.DOCKER_USERNAME != '' }}"
+          echo "DB_PASSWORD is set: ${{ secrets.DB_PASSWORD != '' }}"
+
+      # 启动服务（内联导出变量）
+      - name: Build and start services
+        run: |
+          export DOCKER_USERNAME="${{ secrets.DOCKER_USERNAME }}"
+          export MSSQL_SA_PASSWORD="${{ secrets.DB_PASSWORD }}"
+          export DB_PASSWORD="${{ secrets.DB_PASSWORD }}"
           docker compose -f docker-compose.ci.yml up -d --build
 
-      # 显示容器状态（快速诊断）
+      # 显示容器状态
       - name: Show container status
-        run: |
-          docker compose -f docker-compose.ci.yml ps
-          # 如果 web 容器未运行，直接失败
-          if ! docker compose -f docker-compose.ci.yml ps --status running | grep learnsite-ci; then
-            echo "❌ Web container is not running!"
-            exit 1
-          fi
+        run: docker compose -f docker-compose.ci.yml ps
 
-      # 等待 Web 服务就绪（在容器内执行 curl，镜像需自带 curl）
+      # 等待 Web 服务就绪（容器内 curl）
       - name: Wait for web service inside container
         run: |
           echo "⏳ Waiting for web service inside container..."
