@@ -2,18 +2,16 @@ version: '3.8'
 
 services:
   learnsite:
+    # 镜像名：请将 orzg 替换为您的 Docker Hub 用户名
     image: orzg/learnsite-web:latest
     container_name: learnsite
 
-    # 【网络模式选择】根据您的环境选择一种，并确保 MSSQL 容器端口映射正确
-    # 方案 A：host 模式（容器与宿主机共享网络）
+    # ===== 网络模式选择 =====
+    # 默认使用 host 模式，如需 bridge 模式，请取消下面 network_mode 行的注释，并注释掉 host 行。
     network_mode: host
-    # 如果使用 host 模式，不需要 ports 映射，请注释掉下方 ports 部分
-
-    # 方案 B：bridge 模式（如需使用，取消下面注释，并注释上方 network_mode: host）
     # network_mode: bridge
     # ports:
-    #   - "8080:8080"
+    #   - "8080:8080"                # bridge 模式下需取消注释并映射端口
 
     volumes:
       # 源码和状态持久化：使用相对路径，所有数据保存在当前目录的 app 子目录中

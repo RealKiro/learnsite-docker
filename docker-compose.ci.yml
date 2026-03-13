@@ -1,14 +1,15 @@
 version: '3.8'
 
 services:
-  # SQL Server 数据库服务（CI 测试版）
   mssql:
-    image: orzg/mssql-learnsite:latest
+    # 使用变量 ${DOCKER_USERNAME}，在 CI 中通过环境变量注入实际用户名
+    image: ${DOCKER_USERNAME}/mssql-learnsite:latest
     container_name: mssql-ci
-    working_dir: /var/opt/mssql
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+      - PUID=1000
+      - PGID=1000
       - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
       - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
     ports:
@@ -19,9 +20,8 @@ services:
       - learnsite-net
     restart: "no"
 
-  # LearnSite Web 服务（CI 测试版）
   learnsite:
-    image: orzg/learnsite-web:latest
+    image: ${DOCKER_USERNAME}/learnsite-web:latest
     container_name: learnsite-ci
     ports:
       - "8080:8080"
@@ -29,7 +29,6 @@ services:
       - learnsite_data:/app
     environment:
       - MONO_IOMAP=all
-      # 测试环境使用统一地址 172.17.0.1，需确保 mssql 端口映射到宿主机
       - DB_HOST=172.17.0.1
       - DB_NAME=learnsite
       - DB_USER=sa

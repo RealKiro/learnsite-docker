@@ -4,18 +4,20 @@ services:
   learnsite:
     image: orzg/learnsite-web:latest
     container_name: learnsite
-    # 【网络模式选择】根据您的环境选择一种，并确保 MSSQL 容器端口映射正确
+
     network_mode: host
-    # 如果使用 bridge 模式，请注释上方 network_mode，并取消下方注释
+    # network_mode: bridge
     # ports:
     #   - "8080:8080"
+
     volumes:
       - ./app:/app
     environment:
       - MONO_IOMAP=all
-      - DB_HOST=172.17.0.1          # 统一使用 Docker 默认网关
+      - DB_HOST=172.17.0.1
       - DB_NAME=learnsite
       - DB_USER=sa
+      # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=YourStrong!Password123
       - AUTO_UPDATE_SOURCE=false
       - PRIMARY_REPO_URL=https://gitee.com/realiy/learnsite.git
@@ -27,16 +29,20 @@ services:
   mssql:
     image: orzg/mssql-learnsite:latest
     container_name: mssql
-    working_dir: /var/opt/mssql
+
     network_mode: host
-    # 如果使用 bridge 模式，请注释上方 network_mode，并取消下方注释
+    # network_mode: bridge
     # ports:
     #   - "1433:1433"
+
     volumes:
       - ./data:/var/opt/mssql
     environment:
       - ACCEPT_EULA=Y
+      # ↓↓↓ 【必须修改】请设置与 DB_PASSWORD 相同的强密码 ↓↓↓
       - MSSQL_SA_PASSWORD=YourStrong!Password123
+      - PUID=1000
+      - PGID=1000
       - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
       - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
     restart: unless-stopped

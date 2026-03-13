@@ -2,21 +2,17 @@ version: '3.8'
 
 services:
   mssql:
+    # 镜像名：请将 orzg 替换为您的 Docker Hub 用户名
     image: orzg/mssql-learnsite:latest
     container_name: mssql
 
-    # 【新增】设置工作目录为数据卷挂载点，避免权限错误
-    working_dir: /var/opt/mssql
-
-    # 【网络模式选择】必须与 learnsite 保持一致
-    # 方案 A：host 模式
+    # ===== 网络模式选择 =====
+    # 必须与 learnsite 服务的网络模式保持一致
+    # 默认使用 host 模式，如需 bridge 模式，请取消下面 network_mode 行的注释，并注释掉 host 行。
     network_mode: host
-    # 如果使用 host 模式，不需要 ports 映射，请注释掉下方 ports 部分
-
-    # 方案 B：bridge 模式（如需使用，取消下面注释，并注释上方 network_mode: host）
     # network_mode: bridge
     # ports:
-    #   - "1433:1433"
+    #   - "1433:1433"                # bridge 模式下需取消注释并映射端口
 
     volumes:
       # 数据库文件持久化：使用相对路径，所有数据保存在当前目录的 data 子目录中
@@ -24,8 +20,14 @@ services:
 
     environment:
       - ACCEPT_EULA=Y
-      # ↓↓↓ 【必须修改】请设置一个强密码（至少8位，含大小写字母、数字和特殊字符）↓↓↓
+      # ↓↓↓ 【必须修改】请设置与 learnsite 服务中 DB_PASSWORD 相同的强密码 ↓↓↓
       - MSSQL_SA_PASSWORD=YourStrong!Password123
+
+      # PUID 和 PGID：用于自动修复宿主机 data 目录的权限
+      # 默认值 1000 通常为第一个普通用户的 UID/GID，您可以根据实际情况修改
+      - PUID=1000
+      - PGID=1000
+
       # SQL 文件下载地址（可选，如不设置则使用镜像内的默认值）
       - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
       - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
