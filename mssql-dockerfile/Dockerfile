@@ -1,12 +1,10 @@
 # 基于 Azure SQL Edge 镜像（轻量、稳定）
 FROM mcr.microsoft.com/azure-sql-edge:latest
 
-# 安装 gosu（用于从 root 切换到普通用户）
-# 先创建 apt 需要的目录，然后更新并安装 gosu
-RUN mkdir -p /var/lib/apt/lists/partial && \
-    apt-get update && \
-    apt-get install -y gosu && \
-    rm -rf /var/lib/apt/lists/*
+# 下载 gosu 二进制（使用 wget，镜像通常自带）
+# 注意：如果 wget 不可用，可改用 curl，但 Azure SQL Edge 通常包含 wget
+RUN wget -O /usr/local/bin/gosu "https://github.com/tianon/gosu/releases/download/1.14/gosu-amd64" \
+    && chmod +x /usr/local/bin/gosu
 
 # 将自定义入口脚本复制到镜像内，并直接设置为可执行
 COPY --chmod=0755 mssql-entrypoint.sh /entrypoint.sh
