@@ -53,13 +53,16 @@ jobs:
           load: true
           tags: ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }}
 
-      # 7. 安装 Mint (SlimToolkit)
-      - name: Install Mint (SlimToolkit)
+      # 7. 安装 Mint (SlimToolkit) - 使用直接下载二进制的方式
+      - name: Install Mint (SlimToolkit) binary
         run: |
-          curl -sL https://raw.githubusercontent.com/mintoolkit/mint/master/scripts/install-mint.sh | sudo -E bash -
+          MINT_VERSION="1.41.8"
+          wget -O /tmp/mint.tar.gz "https://github.com/mintoolkit/mint/releases/download/${MINT_VERSION}/dist_linux.tar.gz"
+          tar -xzf /tmp/mint.tar.gz -C /tmp
+          sudo mv /tmp/dist_linux/mint /usr/local/bin/mint
           mint --version
 
-      # 8. 使用 Mint 对镜像进行瘦身，生成 dev 标签（也使用 secrets.DOCKER_USERNAME）
+      # 8. 使用 Mint 对镜像进行瘦身，生成 dev 标签
       - name: Slim the image with Mint
         run: |
           mint build \
@@ -67,7 +70,7 @@ jobs:
             --tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev \
             ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }}
 
-      # 9. 为了测试，将 dev 镜像临时标记为 latest（方便测试环境使用）
+      # 9. 为了测试，将 dev 镜像临时标记为 latest
       - name: Tag dev as latest for testing
         run: docker tag ${{ secrets.DOCKER_USERNAME }}/learnsite-web:dev ${{ secrets.DOCKER_USERNAME }}/learnsite-web:latest
 
@@ -75,11 +78,11 @@ jobs:
       - name: Copy test compose file
         run: cp my-repo/docker-compose.ci.yml .
 
-      # 11. 拉取 MSSQL 镜像（确保存在，使用 secrets.DOCKER_USERNAME）
+      # 11. 拉取 MSSQL 镜像（确保存在）
       - name: Pull MSSQL image
         run: docker pull ${{ secrets.DOCKER_USERNAME }}/mssql-learnsite:latest
 
-      # 12. 运行集成测试（传递环境变量 DOCKER_USERNAME 供 compose 替换）
+      # 12. 运行集成测试
       - name: Run integration tests
         env:
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
