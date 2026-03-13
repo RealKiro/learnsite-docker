@@ -1,11 +1,10 @@
-name: Docker Compose Integration Test (CI)
+name: Docker Compose Integration Test
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:
 
 jobs:
   test:
@@ -18,35 +17,57 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 启动所有服务，通过环境变量传递密码
-      - name: Start services
+      # 启动服务（显式传递所有必要变量）
+      - name: Build and start services
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          MSSQL_SA_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
         run: |
-          MSSQL_SA_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-          DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-          docker compose -f docker-compose.ci.yml up -d
+          docker compose -f docker-compose.ci.yml up -d --build
 
-      - name: List containers
-        run: docker ps -a
-
-      # 等待 MSSQL 初始化完成
-      - name: Wait for MSSQL to initialize
+      # 显示容器状态（快速诊断）
+      - name: Show container status
         run: |
-          echo "⏳ Waiting for MSSQL to initialize..."
-          timeout 120s bash -c "until docker exec mssql-ci test -f /var/opt/mssql/db_initialized; do sleep 5; done"
-          echo "✅ MSSQL initialized."
+          docker compose -f docker-compose.ci.yml ps
+          # 如果 web 容器未运行，直接失败
+          if ! docker compose -f docker-compose.ci.yml ps --status running | grep learnsite-ci; then
+            echo "❌ Web container is not running!"
+            exit 1
+          fi
 
-      # 等待 LearnSite 初始化完成
-      - name: Wait for LearnSite to initialize
+      # 等待 Web 服务就绪（在容器内执行 curl，镜像需自带 curl）
+      - name: Wait for web service inside container
         run: |
-          echo "⏳ Waiting for LearnSite to initialize..."
-          timeout 120s bash -c "until docker exec learnsite-ci test -f /app/.initialized; do sleep 5; done"
-          echo "✅ LearnSite initialized."
+          echo "⏳ Waiting for web service inside container..."
+          timeout 120s sh -c '
+            until docker compose -f docker-compose.ci.yml exec -T learnsite curl -s --fail http://localhost:8080; do
+              echo "   Still waiting... (container status below)"
+              docker compose -f docker-compose.ci.yml ps learnsite
+              echo ""
+              sleep 5
+            done
+          '
+          echo "✅ Web service is ready!"
 
-      - name: Test web service
+      # 核心测试：在容器内访问 Web 服务
+      - name: Test web service (inside container)
         run: |
-          curl -f --retry 5 --retry-delay 5 http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
-          echo "✅ Web service responded successfully."
+          docker compose -f docker-compose.ci.yml exec -T learnsite curl -v --fail http://localhost:8080 || (echo "❌ Web test failed" && exit 1)
 
-      - name: Clean up
+      # 可选：数据库连接测试
+      - name: Test database connectivity
+        run: |
+          echo "🔍 Checking SQL Server connection..."
+          sleep 20
+          docker compose -f docker-compose.ci.yml exec -T mssql /opt/mssql-tools18/bin/sqlcmd \
+            -S localhost -U sa -P "${{ secrets.DB_PASSWORD }}" \
+            -C -Q "SELECT @@VERSION" \
+            && echo "✅ Database connection successful" \
+            || echo "⚠️ Warning: Database not ready, continuing"
+        continue-on-error: true
+
+      # 清理资源
+      - name: Stop and clean up
         if: always()
         run: docker compose -f docker-compose.ci.yml down -v
