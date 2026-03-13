@@ -1,12 +1,16 @@
-name: Promote dev to latest
+name: Promote to latest
 
 on:
   workflow_dispatch:
     inputs:
       source_tag:
-        description: '源镜像标签 (默认 dev)'
-        required: false
+        description: '源镜像标签 (默认 dev，也可选 latest)'
+        required: true
         default: 'dev'
+        type: choice
+        options:
+          - dev
+          - latest
 
 jobs:
   promote:
