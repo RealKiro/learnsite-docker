@@ -1,11 +1,10 @@
 version: '3.8'
 
 services:
-  # SQL Server 数据库服务（CI 测试版，使用自定义镜像）
+  # SQL Server 数据库服务（CI 测试版）
   mssql:
     image: orzg/mssql-learnsite:latest
     container_name: mssql-ci
-    # 【新增】设置工作目录为数据卷挂载点，避免权限错误
     working_dir: /var/opt/mssql
     environment:
       - ACCEPT_EULA=Y
@@ -30,7 +29,8 @@ services:
       - learnsite_data:/app
     environment:
       - MONO_IOMAP=all
-      - DB_HOST=mssql
+      # 测试环境使用统一地址 172.17.0.1，需确保 mssql 端口映射到宿主机
+      - DB_HOST=172.17.0.1
       - DB_NAME=learnsite
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}

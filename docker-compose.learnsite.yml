@@ -5,8 +5,8 @@ services:
     image: orzg/learnsite-web:latest
     container_name: learnsite
 
-    # 【网络模式选择】必须与 mssql 保持一致
-    # 方案 A：host 模式
+    # 【网络模式选择】根据您的环境选择一种，并确保 MSSQL 容器端口映射正确
+    # 方案 A：host 模式（容器与宿主机共享网络）
     network_mode: host
     # 如果使用 host 模式，不需要 ports 映射，请注释掉下方 ports 部分
 
@@ -21,10 +21,9 @@ services:
 
     environment:
       - MONO_IOMAP=all
-      # 数据库主机地址：
-      #   - 如果使用 host 模式，可设为 localhost 或 172.17.0.1
-      #   - 如果使用 bridge 模式，需设为宿主机 IP 或 localhost（因为无法通过服务名解析）
-      - DB_HOST=localhost
+      # 数据库主机地址：统一使用 Docker 默认网关 172.17.0.1
+      # 无论 host 还是 bridge 模式，只要 MSSQL 容器端口映射正确，此地址均可访问
+      - DB_HOST=172.17.0.1
       - DB_NAME=learnsite
       - DB_USER=sa
       # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
