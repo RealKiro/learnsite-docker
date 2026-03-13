@@ -53,13 +53,15 @@ jobs:
           load: true
           tags: ${{ secrets.DOCKER_USERNAME }}/learnsite-web:build-${{ github.sha }}
 
-      # 7. 安装 Mint (SlimToolkit) - 使用直接下载二进制的方式
+      # 7. 安装 Mint (SlimToolkit) - 直接下载二进制并复制所有文件
       - name: Install Mint (SlimToolkit) binary
         run: |
           MINT_VERSION="1.41.8"
           wget -O /tmp/mint.tar.gz "https://github.com/mintoolkit/mint/releases/download/${MINT_VERSION}/dist_linux.tar.gz"
           tar -xzf /tmp/mint.tar.gz -C /tmp
-          sudo mv /tmp/dist_linux/mint /usr/local/bin/mint
+          # 将解压后的所有文件（包括 mint-sensor）复制到 /usr/local/bin
+          sudo cp -r /tmp/dist_linux/* /usr/local/bin/
+          sudo chmod +x /usr/local/bin/mint /usr/local/bin/mint-sensor
           mint --version
 
       # 8. 使用 Mint 对镜像进行瘦身，生成 dev 标签
