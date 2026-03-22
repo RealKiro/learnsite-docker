@@ -29,6 +29,8 @@ services:
       - PGID=1000
 
       # SQL 文件下载地址（可选，如不设置则使用镜像内的默认值）
-      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql
-      - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql
+      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/${BRANCH:-main}/sql/learnsite.sql
+      - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/${BRANCH:-main}/sql/learnsite.sql
+      # ↓↓↓ 【可选】指定源码分支，默认为main，设置为dev可使用dev分支 ↓↓↓
+      - BRANCH=main
     restart: unless-stopped

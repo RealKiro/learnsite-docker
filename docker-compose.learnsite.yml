@@ -31,4 +31,6 @@ services:
       # 源码仓库地址（可选，如不设置则使用镜像内的默认值）
       - PRIMARY_REPO_URL=https://gitee.com/realiy/learnsite.git
       - FALLBACK_REPO_URL=https://github.com/RealKiro/learnsite.git
+      # ↓↓↓ 【可选】指定源码分支，默认为main，设置为dev可使用dev分支 ↓↓↓
+      - BRANCH=main
     restart: unless-stopped
