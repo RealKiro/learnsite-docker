@@ -11,11 +11,12 @@ if [ ! -d "/.system" ]; then
 fi
 
 # ========== 环境变量默认值（可通过 docker-compose 覆盖）==========
-: "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
-: "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
+: "${BRANCH:=main}"
+: "${PRIMARY_REPO_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads}"
+: "${FALLBACK_REPO_URL:=https://gitee.com/realiy/learnsite/raw}"
 
 INIT_MARKER="/var/opt/mssql/db_initialized"
-SQL_SCRIPT="/tmp/learnsite.sql"
+SQL_DIR="/tmp/sql"
 SQLCMD="/opt/mssql-tools/bin/sqlcmd"
 
 # ========== 启动 SQL Server（以 root 运行）==========
@@ -40,33 +41,93 @@ done
 
 # ========== 首次运行时初始化数据库 ==========
 if [ ! -f "$INIT_MARKER" ]; then
-    echo "🔍 First run detected. Downloading learnsite.sql..."
+    echo "🔍 First run detected. Preparing SQL scripts..."
 
-    if curl -f -sSL -o "$SQL_SCRIPT" "$PRIMARY_SQL_URL" 2>/dev/null; then
-        echo "✅ Downloaded from primary URL."
+    # 创建SQL目录
+    mkdir -p "$SQL_DIR"
+    
+    # 下载整个sql目录作为zip文件
+    echo "📥 Downloading SQL directory..."
+    PRIMARY_ZIP_URL="$PRIMARY_REPO_URL/$BRANCH/sql.zip"
+    FALLBACK_ZIP_URL="$FALLBACK_REPO_URL/$BRANCH/sql.zip"
+    
+    if curl -f -sSL -o "$SQL_DIR/sql.zip" "$PRIMARY_ZIP_URL" 2>/dev/null; then
+        echo "✅ Downloaded SQL directory from primary URL."
     else
-        echo "⚠️ Primary download failed, trying fallback URL: $FALLBACK_SQL_URL"
-        if curl -f -sSL -o "$SQL_SCRIPT" "$FALLBACK_SQL_URL"; then
-            echo "✅ Downloaded from fallback URL."
+        echo "⚠️ Primary download failed, trying fallback URL for SQL directory"
+        if curl -f -sSL -o "$SQL_DIR/sql.zip" "$FALLBACK_ZIP_URL"; then
+            echo "✅ Downloaded SQL directory from fallback URL."
         else
-            echo "❌ Failed to download learnsite.sql from both URLs."
+            echo "⚠️ Failed to download SQL directory as zip, trying alternative method..."
+            
+            # 备选方案：尝试直接下载learnsite.sql
+            echo "📥 Downloading learnsite.sql..."
+            PRIMARY_SQL_URL="$PRIMARY_REPO_URL/$BRANCH/sql/learnsite.sql"
+            FALLBACK_SQL_URL="$FALLBACK_REPO_URL/$BRANCH/sql/learnsite.sql"
+            
+            if curl -f -sSL -o "$SQL_DIR/learnsite.sql" "$PRIMARY_SQL_URL" 2>/dev/null; then
+                echo "✅ Downloaded learnsite.sql from primary URL."
+            else
+                echo "⚠️ Primary download failed, trying fallback URL for learnsite.sql"
+                if curl -f -sSL -o "$SQL_DIR/learnsite.sql" "$FALLBACK_SQL_URL"; then
+                    echo "✅ Downloaded learnsite.sql from fallback URL."
+                else
+                    echo "❌ Failed to download any SQL scripts."
+                    exit 1
+                fi
+            fi
+        fi
+    fi
+    
+    # 解压zip文件（如果存在）
+    if [ -f "$SQL_DIR/sql.zip" ]; then
+        echo "📦 Extracting SQL scripts..."
+        unzip -q "$SQL_DIR/sql.zip" -d "$SQL_DIR"
+        rm -f "$SQL_DIR/sql.zip"
+    fi
+    
+    # 获取所有SQL脚本文件（按文件名排序）
+    SQL_SCRIPTS=($(find "$SQL_DIR" -name "*.sql" | sort))
+    
+    # 如果没有找到SQL脚本，检查是否有learnsite.sql
+    if [ ${#SQL_SCRIPTS[@]} -eq 0 ]; then
+        if [ -f "$SQL_DIR/learnsite.sql" ]; then
+            SQL_SCRIPTS=($SQL_DIR/learnsite.sql)
+        else
+            echo "❌ No SQL scripts found."
             exit 1
         fi
     fi
+    
+    echo "📋 Found ${#SQL_SCRIPTS[@]} SQL scripts to execute:"
+    for script in "${SQL_SCRIPTS[@]}"; do
+        echo "- $(basename "$script")"
+    done
 
     # 确保 learnsite 数据库存在
     echo "📦 Ensuring database 'learnsite' exists..."
     $SQLCMD -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -Q "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'learnsite') CREATE DATABASE learnsite;"
 
-    echo "⚙️ Running initialization script..."
-    if $SQLCMD -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d learnsite -i "$SQL_SCRIPT"; then
-        touch "$INIT_MARKER"
-        rm -f "$SQL_SCRIPT"
-        echo "✅ Database initialized."
-    else
-        echo "❌ Database initialization failed."
-        exit 1
-    fi
+    # 执行SQL脚本
+    echo "⚙️ Running initialization scripts..."
+    for script in "${SQL_SCRIPTS[@]}"; do
+        script_name=$(basename "$script")
+        if [ -f "$script" ]; then
+            echo "Executing $script_name..."
+            if $SQLCMD -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -C -d learnsite -i "$script"; then
+                echo "✅ $script_name executed successfully."
+            else
+                echo "⚠️ $script_name execution failed, continuing..."
+            fi
+        else
+            echo "⏭️ $script_name not found, skipping..."
+        fi
+    done
+
+    # 标记初始化完成
+    touch "$INIT_MARKER"
+    rm -rf "$SQL_DIR"
+    echo "✅ Database initialization completed."
 else
     echo "⏭️ Database already initialized. Skipping."
 fi

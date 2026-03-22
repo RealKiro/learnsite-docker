@@ -5,16 +5,16 @@ services:
     image: orzg/learnsite-web:latest
     container_name: learnsite
 
-    # network_mode: host
-    network_mode: bridge
-    ports:
-      - "8080:8080"
+    network_mode: host
+    # network_mode: bridge
+    # ports:
+    #   - "8080:8080"
 
     volumes:
       - ./app:/app
     environment:
       - MONO_IOMAP=all
-      - DB_HOST=mssql
+      - DB_HOST=172.17.0.1
       - DB_NAME=learnsite
       - DB_USER=sa
       # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
@@ -22,22 +22,18 @@ services:
       - AUTO_UPDATE_SOURCE=false
       - PRIMARY_REPO_URL=https://gitee.com/realiy/learnsite.git
       - FALLBACK_REPO_URL=https://github.com/RealKiro/learnsite.git
-      # ↓↓↓ 【可选】指定源码分支，默认为main，设置为dev可使用dev分支 ↓↓↓
-      - BRANCH=main
     restart: unless-stopped
     depends_on:
       - mssql
-    networks:
-      - learnsite-net
 
   mssql:
     image: orzg/mssql-learnsite:latest
     container_name: mssql
 
-    # network_mode: host
-    network_mode: bridge
-    ports:
-      - "1433:1433"
+    network_mode: host
+    # network_mode: bridge
+    # ports:
+    #   - "1433:1433"
 
     volumes:
       - ./data:/var/opt/mssql
@@ -47,12 +43,6 @@ services:
       - MSSQL_SA_PASSWORD=YourStrong!Password123
       - PUID=1000
       - PGID=1000
-      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/${BRANCH:-main}/sql/learnsite.sql
-      - FALLBACK_SQL_URL=https://gitee.com/realiy/learnsite/raw/${BRANCH:-main}/sql/learnsite.sql
+      # ↓↓↓ 【可选】指定源码分支，默认为main，设置为dev可使用dev分支 ↓↓↓
+      - BRANCH=main
     restart: unless-stopped
-    networks:
-      - learnsite-net
-
-networks:
-  learnsite-net:
-    driver: bridge
