@@ -29,13 +29,15 @@ services:
       - learnsite_data:/app
     environment:
       - MONO_IOMAP=all
-      - DB_HOST=172.17.0.1
+      - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}
       - AUTO_UPDATE_SOURCE=false
       - PRIMARY_REPO_URL=https://github.com/RealKiro/learnsite.git
       - FALLBACK_REPO_URL=https://gitee.com/realiy/learnsite.git
+      # ↓↓↓ 【可选】指定源码分支，默认为main，设置为dev可使用dev分支 ↓↓↓
+      - BRANCH=main
     networks:
       - learnsite-net
     restart: "no"

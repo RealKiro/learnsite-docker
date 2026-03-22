@@ -12,8 +12,9 @@ fi
 # ========== 配置区域（可被环境变量覆盖）==========
 : "${PRIMARY_REPO_URL:=https://gitee.com/realiy/learnsite.git}"
 : "${FALLBACK_REPO_URL:=https://github.com/RealKiro/learnsite.git}"
-: "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
-: "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
+: "${BRANCH:=main}"
+: "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/${BRANCH}/sql/learnsite.sql}"
+: "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/${BRANCH}/sql/learnsite.sql}"
 : "${CLONE_RETRIES:=3}"
 : "${RETRY_INTERVAL:=5}"
 
@@ -43,8 +44,8 @@ clone_with_retry() {
     local retries=$3
     local attempt=1
     while [ $attempt -le $retries ]; do
-        echo "Attempt $attempt of $retries to clone from $repo_url ..."
-        if git clone --depth 1 "$repo_url" "$target"; then
+        echo "Attempt $attempt of $retries to clone from $repo_url (branch: $BRANCH)..."
+        if git clone --depth 1 -b "$BRANCH" "$repo_url" "$target"; then
             echo "✓ Successfully cloned from $repo_url on attempt $attempt."
             return 0
         else
@@ -64,20 +65,20 @@ clone_with_retry() {
 update_repo() {
     cd "${APP_DIR}"
     # 先尝试普通 git pull
-    if git pull --depth 1 origin 2>/dev/null; then
+    if git pull --depth 1 origin "$BRANCH" 2>/dev/null; then
         echo "✓ Repository updated via git pull."
     else
         echo "⚠️ git pull failed, trying to fetch and reset from primary..."
         # 尝试从主仓库 fetch 并强制重置
-        if git fetch origin --depth 1; then
-            git reset --hard origin/HEAD
-            echo "✓ Repository reset to origin/HEAD from primary."
+        if git fetch origin --depth 1 "$BRANCH"; then
+            git reset --hard origin/"$BRANCH"
+            echo "✓ Repository reset to origin/$BRANCH from primary."
         else
             echo "⚠️ Fetch from primary failed, trying fallback remote..."
             git remote set-url origin "${FALLBACK_REPO_URL}"
-            if git fetch origin --depth 1; then
-                git reset --hard origin/HEAD
-                echo "✓ Repository reset to origin/HEAD from fallback."
+            if git fetch origin --depth 1 "$BRANCH"; then
+                git reset --hard origin/"$BRANCH"
+                echo "✓ Repository reset to origin/$BRANCH from fallback."
             else
                 echo "❌ Failed to update from both remotes."
                 return 1
@@ -139,7 +140,7 @@ elif [ "${AUTO_UPDATE}" = "true" ]; then
     if [ -d "${APP_DIR}/.git" ]; then
         cd "${APP_DIR}"
         LOCAL_COMMIT=$(git rev-parse HEAD)
-        REMOTE_COMMIT=$(git ls-remote "${PRIMARY_REPO_URL}" HEAD | cut -f1)
+        REMOTE_COMMIT=$(git ls-remote "${PRIMARY_REPO_URL}" "refs/heads/${BRANCH}" | cut -f1)
         if [ -n "$REMOTE_COMMIT" ] && [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
             echo "New commits detected. Pulling..."
             if update_repo; then
