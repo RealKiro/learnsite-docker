@@ -19,13 +19,15 @@ services:
 
     environment:
       - MONO_IOMAP=all
-      # 数据库主机地址：统一使用 Docker 默认网关 172.17.0.1
-      # 无论 host 还是 bridge 模式，只要 MSSQL 容器端口映射正确，此地址均可访问
-      - DB_HOST=172.17.0.1
+      # 数据库主机地址：统一使用 Docker 内置 DNS 名称 host.docker.internal
+      # 无论 host 还是 bridge 模式，此地址均可访问宿主机上的服务
+      - DB_HOST=host.docker.internal
       - DB_NAME=learnsite
       - DB_USER=sa
       # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
       - DB_PASSWORD=YourStrong!Password123
+      # 是否自动更新源码：设置为true时，容器启动时会自动从仓库拉取最新源码
+      # 设置为false时，使用本地已有的源码，适合需要自定义修改的场景
       - AUTO_UPDATE_SOURCE=false
 
       # 源码仓库地址（可选，如不设置则使用镜像内的默认值）

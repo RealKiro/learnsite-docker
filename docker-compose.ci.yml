@@ -33,6 +33,8 @@ services:
       - DB_NAME=learnsite
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}
+      # 是否自动更新源码：设置为true时，容器启动时会自动从仓库拉取最新源码
+      # 设置为false时，使用本地已有的源码，适合需要自定义修改的场景
       - AUTO_UPDATE_SOURCE=false
       - PRIMARY_REPO_URL=https://github.com/RealKiro/learnsite.git
       - FALLBACK_REPO_URL=https://gitee.com/realiy/learnsite.git
