@@ -12,8 +12,8 @@ fi
 
 # ========== 环境变量默认值（可通过 docker-compose 覆盖）==========
 : "${BRANCH:=main}"
-: "${PRIMARY_REPO_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads}"
-: "${FALLBACK_REPO_URL:=https://gitee.com/realiy/learnsite/raw}"
+: "${PRIMARY_REPO_URL:=https://raw.githubusercontent.com/aymwoo/learnsite-wz/master}"
+: "${FALLBACK_REPO_URL:=https://gitee.com/jnschool/learnsite-wz/raw}"
 
 INIT_MARKER="/var/opt/mssql/db_initialized"
 SQL_DIR="/tmp/sql"
