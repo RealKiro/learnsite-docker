@@ -17,9 +17,6 @@ ENV LANG=zh_CN.UTF-8
 ENV LANGUAGE=zh_CN:zh
 ENV LC_ALL=zh_CN.UTF-8
 
-# ========== 复制默认 web.config 模板 ==========
-COPY web.config /usr/local/share/default-web.config
-
 # ========== 复制 entrypoint 脚本 ==========
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh

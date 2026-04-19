@@ -20,7 +20,6 @@ STATE_DIR="${APP_DIR}/.state"
 LAST_COMMIT_FILE="${STATE_DIR}/last_commit"
 MARKER_FILE="${APP_DIR}/.initialized"
 TARGET_WEB_CONFIG="${APP_DIR}/web.config"
-DEFAULT_WEB_CONFIG="/usr/local/share/default-web.config"
 
 AUTO_UPDATE=${AUTO_UPDATE_SOURCE:-false}
 
@@ -87,6 +86,37 @@ update_repo() {
         fi
     fi
     cd - >/dev/null
+}
+
+replace_db_connection_string() {
+    local web_config=$1
+    if [ ! -f "$web_config" ]; then
+        echo "❌ ERROR: web.config not found at $web_config"
+        return 1
+    fi
+
+    echo "🔧 Replacing database connection string in web.config..."
+    
+    local db_host="${DB_HOST:-localhost}"
+    local db_name="${DB_NAME:-learnsite}"
+    local db_user="${DB_USER:-sa}"
+    local db_password="${DB_PASSWORD:-YourStrong!Password123}"
+
+    local new_connection_string="Data Source=${db_host};Initial Catalog=${db_name};uid=${db_user};pwd=${db_password};"
+    
+    echo "   DB_HOST: $db_host"
+    echo "   DB_NAME: $db_name"
+    echo "   DB_USER: $db_user"
+    echo "   DB_PASSWORD: ********"
+
+    sed -i.bak "s|Data Source=[^;]*|Data Source=${db_host}|g" "$web_config"
+    sed -i.bak "s|Initial Catalog=[^;]*|Initial Catalog=${db_name}|g" "$web_config"
+    sed -i.bak "s|uid=[^;]*|uid=${db_user}|g" "$web_config"
+    sed -i.bak "s|pwd=[^;]*|pwd=${db_password}|g" "$web_config"
+    
+    rm -f "$web_config.bak"
+    
+    echo "✓ Database connection string updated in web.config"
 }
 
 if [ ! -f "${MARKER_FILE}" ]; then
@@ -164,6 +194,13 @@ else
     echo "⏭️ Marker exists and auto update disabled. Skipping source update."
 fi
 
+if [ -f "${TARGET_WEB_CONFIG}" ]; then
+    replace_db_connection_string "${TARGET_WEB_CONFIG}"
+else
+    echo "❌ ERROR: web.config not found in /app directory!"
+    exit 1
+fi
+
 mkdir -p "${APP_DIR}/sql"
 if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
     echo "⚠️ learnsite.sql not found. Attempting to download..."
@@ -185,23 +222,6 @@ if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
     fi
 else
     echo "✓ learnsite.sql already exists."
-fi
-
-if [ -f "${DEFAULT_WEB_CONFIG}" ]; then
-    echo "Applying custom web.config template..."
-    cp "${DEFAULT_WEB_CONFIG}" "${TARGET_WEB_CONFIG}"
-    echo "✓ Custom web.config applied."
-else
-    echo "❌ ERROR: Default web.config not found in image!"
-    exit 1
-fi
-
-if command -v envsubst >/dev/null 2>&1; then
-    echo "Applying environment variables to web.config..."
-    envsubst < "${TARGET_WEB_CONFIG}" > "${TARGET_WEB_CONFIG}.tmp" && mv "${TARGET_WEB_CONFIG}.tmp" "${TARGET_WEB_CONFIG}"
-    echo "✓ Environment variables applied."
-else
-    echo "⚠️ envsubst not found. Placeholders will remain."
 fi
 
 echo "========================================="
