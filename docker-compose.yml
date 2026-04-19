@@ -23,8 +23,8 @@ services:
       # 设置为false时，使用本地已有的源码，适合需要自定义修改的场景
       - AUTO_UPDATE_SOURCE=false
       - PRIMARY_REPO_URL=https://gitee.com/nylon26/openlearnsite.git
-      # 【可选】备用仓库地址，留空由客户自行填写
-      # - FALLBACK_REPO_URL=
+      # 备用仓库地址设置为空，禁用备用仓库
+      - FALLBACK_REPO_URL=
       # ↓↓↓ 【可选】指定源码分支，默认为master，设置为main可使用main分支 ↓↓↓
       - BRANCH=master
     restart: unless-stopped
