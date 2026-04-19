@@ -16,11 +16,11 @@ jobs:
         with:
           path: my-repo
 
-      # 2. 从 GitHub 拉取 LearnSite 源码（固定 main 分支）
-      - name: Clone source from GitHub
+      # 2. 从 Gitee 拉取 LearnSite 源码（固定 master 分支）
+      - name: Clone source from Gitee
         run: |
-          echo "Cloning from https://github.com/RealKiro/learnsite.git (main branch)..."
-          git clone --depth 1 --branch main https://github.com/RealKiro/learnsite.git app-source
+          echo "Cloning from https://gitee.com/nylon26/openlearnsite.git (master branch)..."
+          git clone --depth 1 --branch master https://gitee.com/nylon26/openlearnsite.git app-source
 
       # 3. 用仓库中的自定义配置覆盖源码中的对应文件
       - name: Replace with custom configs
