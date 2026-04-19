@@ -10,8 +10,9 @@ services:
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
       - PUID=1000
       - PGID=1000
-      - PRIMARY_SQL_URL=https://raw.githubusercontent.com/aymwoo/learnsite-wz/master/sql/learnsite.sql
-      - FALLBACK_SQL_URL=https://gitee.com/jnschool/learnsite-wz/raw/main/sql/learnsite.sql
+      - PRIMARY_SQL_URL=https://gitee.com/nylon26/openlearnsite/raw/${BRANCH:-master}/sql/learnsite.sql
+      # 【可选】备用SQL文件下载地址，留空由客户自行填写
+      # - FALLBACK_SQL_URL=
     ports:
       - "1433:1433"
     volumes:
@@ -36,10 +37,11 @@ services:
       # 是否自动更新源码：设置为true时，容器启动时会自动从仓库拉取最新源码
       # 设置为false时，使用本地已有的源码，适合需要自定义修改的场景
       - AUTO_UPDATE_SOURCE=false
-      - PRIMARY_REPO_URL=https://github.com/RealKiro/learnsite.git
-      - FALLBACK_REPO_URL=https://gitee.com/realiy/learnsite.git
-      # ↓↓↓ 【可选】指定源码分支，默认为main，设置为dev可使用dev分支 ↓↓↓
-      - BRANCH=main
+      - PRIMARY_REPO_URL=https://gitee.com/nylon26/openlearnsite.git
+      # 【可选】备用仓库地址，留空由客户自行填写
+      # - FALLBACK_REPO_URL=
+      # ↓↓↓ 【可选】指定源码分支，默认为master，设置为main可使用main分支 ↓↓↓
+      - BRANCH=master
     networks:
       - learnsite-net
     restart: "no"

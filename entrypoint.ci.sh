@@ -7,10 +7,11 @@ if command -v git >/dev/null 2>&1; then
     git config --global --add safe.directory /app 2>/dev/null || true
 fi
 
-: "${PRIMARY_REPO_URL:=https://gitee.com/realiy/learnsite.git}"
-: "${FALLBACK_REPO_URL:=https://github.com/RealKiro/learnsite.git}"
-: "${PRIMARY_SQL_URL:=https://raw.githubusercontent.com/RealKiro/learnsite/refs/heads/main/sql/learnsite.sql}"
-: "${FALLBACK_SQL_URL:=https://gitee.com/realiy/learnsite/raw/main/sql/learnsite.sql}"
+: "${PRIMARY_REPO_URL:=https://gitee.com/nylon26/openlearnsite.git}"
+: "${FALLBACK_REPO_URL:=}"
+: "${BRANCH:=master}"
+: "${PRIMARY_SQL_URL:=https://gitee.com/nylon26/openlearnsite/raw/${BRANCH}/sql/learnsite.sql}"
+: "${FALLBACK_SQL_URL:=}"
 : "${CLONE_RETRIES:=3}"
 : "${RETRY_INTERVAL:=5}"
 
@@ -93,15 +94,20 @@ if [ ! -f "${MARKER_FILE}" ]; then
         CLONE_SUCCESS=true
         echo "✓ Cloned from primary repository."
     else
-        echo "⚠️ Primary repository failed after ${CLONE_RETRIES} attempts. Trying fallback repository..."
-        if clone_with_retry "${FALLBACK_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
-            CLONE_SUCCESS=true
-            echo "✓ Cloned from fallback repository."
+        echo "⚠️ Primary repository failed after ${CLONE_RETRIES} attempts."
+        if [ -n "${FALLBACK_REPO_URL}" ] && [ "${FALLBACK_REPO_URL}" != "" ]; then
+            echo "Trying fallback repository..."
+            if clone_with_retry "${FALLBACK_REPO_URL}" "${APP_DIR}" ${CLONE_RETRIES}; then
+                CLONE_SUCCESS=true
+                echo "✓ Cloned from fallback repository."
+            fi
+        else
+            echo "⚠️ Fallback repository is not configured. Skipping fallback attempt."
         fi
     fi
 
     if [ "$CLONE_SUCCESS" = false ]; then
-        echo "❌ ERROR: Both primary and fallback repositories failed to clone."
+        echo "❌ ERROR: Failed to clone repository. Please check your repository URL configuration."
         exit 1
     fi
 
@@ -148,11 +154,17 @@ if [ ! -f "${APP_DIR}/sql/learnsite.sql" ]; then
     if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${PRIMARY_SQL_URL}"; then
         echo "✓ Downloaded from primary URL."
     else
-        echo "⚠️ Primary download failed, trying fallback..."
-        if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${FALLBACK_SQL_URL}"; then
-            echo "✓ Downloaded from fallback URL."
+        echo "⚠️ Primary download failed."
+        if [ -n "${FALLBACK_SQL_URL}" ] && [ "${FALLBACK_SQL_URL}" != "" ]; then
+            echo "Trying fallback URL..."
+            if curl -f -sSL -o "${APP_DIR}/sql/learnsite.sql" "${FALLBACK_SQL_URL}"; then
+                echo "✓ Downloaded from fallback URL."
+            else
+                echo "❌ Failed to download learnsite.sql from both URLs. Database init may fail."
+            fi
         else
-            echo "❌ Failed to download learnsite.sql from both URLs. Database init may fail."
+            echo "⚠️ Fallback SQL URL is not configured. Skipping fallback attempt."
+            echo "❌ Failed to download learnsite.sql. Database init may fail."
         fi
     fi
 else
