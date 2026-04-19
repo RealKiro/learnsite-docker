@@ -40,8 +40,8 @@ services:
       - PRIMARY_REPO_URL=https://gitee.com/nylon26/openlearnsite.git
       # 备用仓库地址设置为空，禁用备用仓库
       - FALLBACK_REPO_URL=
-      # ↓↓↓ 【可选】指定源码分支，默认为master，设置为main可使用main分支 ↓↓↓
-      - BRANCH=master
+      # ↓↓↓ 【可选】指定源码分支，默认为master，设置为dev可使用dev分支 ↓↓↓
+      - BRANCH=dev
     networks:
       - learnsite-net
     restart: "no"
