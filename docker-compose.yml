@@ -48,6 +48,10 @@ services:
       - MSSQL_SA_PASSWORD=YourStrong!Password123
       - PUID=1000
       - PGID=1000
-      # ↓↓↓ 【可选】指定源码分支，默认为main，设置为dev可使用dev分支 ↓↓↓
-      - BRANCH=main
+      # SQL 文件下载地址（可选，如不设置则使用镜像内的默认值）
+      - PRIMARY_SQL_URL=https://gitee.com/nylon26/openlearnsite/raw/${BRANCH:-master}/sql/learnsite.sql
+      # 【可选】备用SQL文件下载地址，留空由客户自行填写或通过环境变量覆盖
+      # - FALLBACK_SQL_URL=
+      # ↓↓↓ 【可选】指定源码分支，默认为master，设置为main可使用main分支 ↓↓↓
+      - BRANCH=master
     restart: unless-stopped

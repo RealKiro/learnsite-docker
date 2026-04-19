@@ -11,9 +11,9 @@ if [ ! -d "/.system" ]; then
 fi
 
 # ========== 环境变量默认值（可通过 docker-compose 覆盖）==========
-: "${BRANCH:=main}"
-: "${PRIMARY_REPO_URL:=https://raw.githubusercontent.com/aymwoo/learnsite-wz/master}"
-: "${FALLBACK_REPO_URL:=https://gitee.com/jnschool/learnsite-wz/raw}"
+: "${BRANCH:=master}"
+: "${PRIMARY_REPO_URL:=https://gitee.com/nylon26/openlearnsite/raw}"
+: "${FALLBACK_REPO_URL:=}"
 
 INIT_MARKER="/var/opt/mssql/db_initialized"
 SQL_DIR="/tmp/sql"
@@ -49,32 +49,48 @@ if [ ! -f "$INIT_MARKER" ]; then
     # 下载整个sql目录作为zip文件
     echo "📥 Downloading SQL directory..."
     PRIMARY_ZIP_URL="$PRIMARY_REPO_URL/$BRANCH/sql.zip"
-    FALLBACK_ZIP_URL="$FALLBACK_REPO_URL/$BRANCH/sql.zip"
     
     if curl -f -sSL -o "$SQL_DIR/sql.zip" "$PRIMARY_ZIP_URL" 2>/dev/null; then
         echo "✅ Downloaded SQL directory from primary URL."
     else
-        echo "⚠️ Primary download failed, trying fallback URL for SQL directory"
-        if curl -f -sSL -o "$SQL_DIR/sql.zip" "$FALLBACK_ZIP_URL"; then
-            echo "✅ Downloaded SQL directory from fallback URL."
+        echo "⚠️ Primary download failed."
+        if [ -n "${FALLBACK_REPO_URL}" ] && [ "${FALLBACK_REPO_URL}" != "" ]; then
+            FALLBACK_ZIP_URL="$FALLBACK_REPO_URL/$BRANCH/sql.zip"
+            echo "Trying fallback URL for SQL directory..."
+            if curl -f -sSL -o "$SQL_DIR/sql.zip" "$FALLBACK_ZIP_URL"; then
+                echo "✅ Downloaded SQL directory from fallback URL."
+            else
+                echo "⚠️ Failed to download SQL directory as zip, trying alternative method..."
+                
+                # 备选方案：尝试直接下载learnsite.sql
+                echo "📥 Downloading learnsite.sql..."
+                PRIMARY_SQL_URL="$PRIMARY_REPO_URL/$BRANCH/sql/learnsite.sql"
+                FALLBACK_SQL_URL="$FALLBACK_REPO_URL/$BRANCH/sql/learnsite.sql"
+                
+                if curl -f -sSL -o "$SQL_DIR/learnsite.sql" "$PRIMARY_SQL_URL" 2>/dev/null; then
+                    echo "✅ Downloaded learnsite.sql from primary URL."
+                else
+                    echo "⚠️ Primary download failed, trying fallback URL for learnsite.sql"
+                    if curl -f -sSL -o "$SQL_DIR/learnsite.sql" "$FALLBACK_SQL_URL"; then
+                        echo "✅ Downloaded learnsite.sql from fallback URL."
+                    else
+                        echo "❌ Failed to download any SQL scripts."
+                        exit 1
+                    fi
+                fi
+            fi
         else
-            echo "⚠️ Failed to download SQL directory as zip, trying alternative method..."
+            echo "⚠️ Fallback repository is not configured. Trying alternative method..."
             
             # 备选方案：尝试直接下载learnsite.sql
             echo "📥 Downloading learnsite.sql..."
             PRIMARY_SQL_URL="$PRIMARY_REPO_URL/$BRANCH/sql/learnsite.sql"
-            FALLBACK_SQL_URL="$FALLBACK_REPO_URL/$BRANCH/sql/learnsite.sql"
             
             if curl -f -sSL -o "$SQL_DIR/learnsite.sql" "$PRIMARY_SQL_URL" 2>/dev/null; then
                 echo "✅ Downloaded learnsite.sql from primary URL."
             else
-                echo "⚠️ Primary download failed, trying fallback URL for learnsite.sql"
-                if curl -f -sSL -o "$SQL_DIR/learnsite.sql" "$FALLBACK_SQL_URL"; then
-                    echo "✅ Downloaded learnsite.sql from fallback URL."
-                else
-                    echo "❌ Failed to download any SQL scripts."
-                    exit 1
-                fi
+                echo "❌ Failed to download learnsite.sql. Please check your repository URL configuration."
+                exit 1
             fi
         fi
     fi
