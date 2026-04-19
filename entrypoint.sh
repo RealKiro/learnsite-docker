@@ -45,11 +45,15 @@ clone_with_retry() {
     local attempt=1
     while [ $attempt -le $retries ]; do
         echo "Attempt $attempt of $retries to clone from $repo_url (branch: $BRANCH)..."
-        if git clone --depth 1 -b "$BRANCH" "$repo_url" "$target"; then
+        if timeout 120 git clone --depth 1 -b "$BRANCH" "$repo_url" "$target" 2>&1; then
             echo "✓ Successfully cloned from $repo_url on attempt $attempt."
             return 0
         else
-            echo "⚠️ Clone attempt $attempt failed."
+            local exit_code=$?
+            echo "⚠️ Clone attempt $attempt failed with exit code $exit_code."
+            if [ $exit_code -eq 124 ]; then
+                echo "⏱️ Clone operation timed out (120s)."
+            fi
             if [ $attempt -lt $retries ]; then
                 echo "Retrying in $RETRY_INTERVAL seconds..."
                 sleep $RETRY_INTERVAL
@@ -58,6 +62,11 @@ clone_with_retry() {
         attempt=$((attempt + 1))
     done
     echo "❌ Failed to clone from $repo_url after $retries attempts."
+    echo "Debug info: Checking if git is available..."
+    which git && git --version
+    echo "Checking network connectivity..."
+    ping -c 3 gitee.com 2>/dev/null || echo "Ping failed, trying curl..."
+    curl -I --max-time 10 https://gitee.com 2>/dev/null || echo "curl to gitee.com failed"
     return 1
 }
 
