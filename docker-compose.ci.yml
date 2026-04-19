@@ -22,7 +22,7 @@ services:
     restart: "no"
 
   learnsite:
-    image: ${DOCKER_USERNAME}/learnsite-web:latest
+    image: ${DOCKER_USERNAME}/learnsite-web:dev
     container_name: learnsite-ci
     ports:
       - "8080:8080"
