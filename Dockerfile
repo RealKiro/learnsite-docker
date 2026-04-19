@@ -21,6 +21,9 @@ ENV LC_ALL=zh_CN.UTF-8
 COPY entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
+# ========== 复制应用源码 ==========
+COPY . /app
+
 WORKDIR /app
 EXPOSE 8080
 
