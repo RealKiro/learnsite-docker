@@ -4,12 +4,21 @@ services:
   learnsite:
     image: orzg/learnsite-web:latest
     container_name: learnsite
+    # ===== 网络模式选择 =====
+    # 默认使用 host 模式，容器直接使用宿主机网络
+    # 如果 8080 或 1433 端口被占用，请取消下面 bridge 模式的注释，注释掉 host 模式
     network_mode: host
+    # network_mode: bridge
+    # ports:
+    #   - "8080:8080"                # bridge 模式下需取消注释并映射端口
     volumes:
       - ./app:/app
     environment:
       - MONO_IOMAP=all
+      # 数据库连接地址：host模式下使用127.0.0.1，bridge模式下使用服务名mssql
       - DB_HOST=127.0.0.1
+      # bridge模式时取消注释：
+      # - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
       # ↓↓↓ 【必须修改】必须与 MSSQL_SA_PASSWORD 保持一致 ↓↓↓
@@ -32,7 +41,13 @@ services:
     container_name: mssql
     restart: unless-stopped
     user: root
+    # ===== 网络模式选择 =====
+    # 默认使用 host 模式，容器直接使用宿主机网络
+    # 如果端口被占用，请切换到 bridge 模式
     network_mode: host
+    # network_mode: bridge
+    # ports:
+    #   - "1433:1433"                # bridge 模式下需取消注释并映射端口
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=YourStrong@Passw0rd123

@@ -6,7 +6,13 @@ services:
     container_name: mssql
     restart: unless-stopped
     user: root
+    # ===== 网络模式选择 =====
+    # 默认使用 host 模式，容器直接使用宿主机网络
+    # 如果 1433 端口被占用，请取消下面 bridge 模式的注释，注释掉 host 模式
     network_mode: host
+    # network_mode: bridge
+    # ports:
+    #   - "1433:1433"                # bridge 模式下需取消注释并映射端口
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=YourStrong@Passw0rd123
