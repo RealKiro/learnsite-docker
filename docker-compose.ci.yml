@@ -5,18 +5,15 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql-ci
     user: root
+    network_mode: host
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
       - MSSQL_PID=Express
       - TZ=Asia/Shanghai
       - MSSQL_COLLATION=Chinese_PRC_CI_AS
-    ports:
-      - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
-    networks:
-      - learnsite-net
     restart: "no"
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${MSSQL_SA_PASSWORD}' -C -Q 'SELECT 1' || exit 1"]
@@ -24,33 +21,16 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
-    command: >
-      sh -c "
-        /opt/mssql/bin/sqlservr &
-        sleep 30 &&
-        /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P '${MSSQL_SA_PASSWORD}' -C -Q \"
-          EXEC sp_configure 'show advanced options', 1;
-          RECONFIGURE;
-          EXEC sp_configure 'remote login timeout', 30;
-          RECONFIGURE;
-          EXEC sp_configure 'remote query timeout', 600;
-          RECONFIGURE;
-          EXEC sp_configure 'remote proc trans', 0;
-          RECONFIGURE;
-        \"
-        wait
-      "
 
   learnsite:
     image: ${DOCKER_USERNAME}/learnsite-web:dev
     container_name: learnsite-ci
-    ports:
-      - "8080:8080"
+    network_mode: host
     volumes:
       - learnsite_data:/app
     environment:
       - MONO_IOMAP=all
-      - DB_HOST=mssql
+      - DB_HOST=127.0.0.1
       - DB_NAME=learnsite
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}
@@ -62,8 +42,6 @@ services:
       - FALLBACK_REPO_URL=
       # ↓↓↓ 【可选】指定源码分支，默认为master，设置为dev可使用dev分支 ↓↓↓
       - BRANCH=dev
-    networks:
-      - learnsite-net
     restart: "no"
     depends_on:
       mssql:
@@ -72,7 +50,3 @@ services:
 volumes:
   learnsite_data:
   mssql_data:
-
-networks:
-  learnsite-net:
-    driver: bridge

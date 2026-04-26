@@ -6,6 +6,7 @@ services:
     container_name: mssql
     restart: unless-stopped
     user: root
+    network_mode: host
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=YourStrong@Passw0rd123
@@ -14,8 +15,6 @@ services:
       - MSSQL_COLLATION=Chinese_PRC_CI_AS
     volumes:
       - ./data:/var/opt/mssql
-    ports:
-      - "1433:1433"
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd123' -C -Q 'SELECT 1' || exit 1"]
       interval: 30s
