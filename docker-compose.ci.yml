@@ -27,6 +27,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    networks:
+      - learnsite
 
   learnsite:
     image: ${DOCKER_USERNAME}/learnsite-web:dev
@@ -61,7 +63,14 @@ services:
     depends_on:
       mssql:
         condition: service_healthy
+    networks:
+      - learnsite
 
 volumes:
   learnsite_data:
   mssql_data:
+
+networks:
+  learnsite:
+    name: learnsite
+    driver: bridge

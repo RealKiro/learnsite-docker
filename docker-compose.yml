@@ -35,6 +35,8 @@ services:
     depends_on:
       mssql:
         condition: service_healthy
+    networks:
+      - learnsite
 
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -62,3 +64,10 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    networks:
+      - learnsite
+
+networks:
+  learnsite:
+    name: learnsite
+    driver: bridge
