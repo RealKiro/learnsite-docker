@@ -2,36 +2,22 @@ version: '3.8'
 
 services:
   mssql:
-    # 镜像名：请将 orzg 替换为您的 Docker Hub 用户名
-    image: orzg/mssql-learnsite:latest
+    image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql
-
-    # ===== 网络模式选择 =====
-    # 必须与 learnsite 服务的网络模式保持一致
-    # 默认使用 host 模式，如需 bridge 模式，请取消下面 network_mode 行的注释，并注释掉 host 行。
-    network_mode: host
-    # network_mode: bridge
-    # ports:
-    #   - "1433:1433"                # bridge 模式下需取消注释并映射端口
-
-    volumes:
-      # 数据库文件持久化：使用相对路径，所有数据保存在当前目录的 data 子目录中
-      - ./data:/var/opt/mssql
-
+    restart: unless-stopped
     environment:
       - ACCEPT_EULA=Y
-      # ↓↓↓ 【必须修改】请设置与 learnsite 服务中 DB_PASSWORD 相同的强密码 ↓↓↓
-      - MSSQL_SA_PASSWORD=YourStrong!Password123
-
-      # PUID 和 PGID：用于自动修复宿主机 data 目录的权限
-      # 默认值 1000 通常为第一个普通用户的 UID/GID，您可以根据实际情况修改
-      - PUID=1000
-      - PGID=1000
-
-      # SQL 文件下载地址（可选，如不设置则使用镜像内的默认值）
-      - PRIMARY_SQL_URL=https://gitee.com/nylon26/openlearnsite/raw/${BRANCH:-master}/sql/learnsite.sql
-      # 【可选】备用SQL文件下载地址，留空由客户自行填写或通过环境变量覆盖
-      # - FALLBACK_SQL_URL=
-      # ↓↓↓ 【可选】指定源码分支，默认为master，设置为main可使用main分支 ↓↓↓
-      - BRANCH=master
-    restart: unless-stopped
+      - MSSQL_SA_PASSWORD=YourStrong@Passw0rd123
+      - MSSQL_PID=Express
+      - TZ=Asia/Shanghai
+      - MSSQL_COLLATION=Chinese_PRC_CI_AS
+    volumes:
+      - ./data:/var/opt/mssql
+    ports:
+      - "1433:1433"
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Passw0rd123' -C -Q 'SELECT 1' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
