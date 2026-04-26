@@ -1,15 +1,8 @@
-version: '3.8'
-
 services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql-ci
     user: root
-    # ===== 网络模式选择 =====
-    # 默认使用 bridge 模式，使用自定义网络
-    # 如果需要 host 模式，请取消下面 network_mode 的注释，并注释掉 networks 和 ports
-    # network_mode: host
-    network_mode: bridge
     ports:
       - "1433:1433"
     environment:
@@ -33,29 +26,19 @@ services:
   learnsite:
     image: ${DOCKER_USERNAME}/learnsite-web:dev
     container_name: learnsite-ci
-    # ===== 网络模式选择 =====
-    # 默认使用 bridge 模式，使用自定义网络
-    # 如果需要 host 模式，请取消下面 network_mode 的注释，并注释掉 networks 和 ports
-    # network_mode: host
-    network_mode: bridge
     ports:
       - "8080:8080"
     volumes:
       - learnsite_data:/app
     environment:
       - MONO_IOMAP=all
-      # 数据库连接地址：bridge模式下使用服务名mssql
       - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}
-      # 是否自动更新源码：设置为true时，容器启动时会自动从仓库拉取最新源码
-      # 设置为false时，使用本地已有的源码，适合需要自定义修改的场景
       - AUTO_UPDATE_SOURCE=false
       - PRIMARY_REPO_URL=https://gitee.com/nylon26/openlearnsite.git
-      # 备用仓库地址设置为空，禁用备用仓库
       - FALLBACK_REPO_URL=
-      # ↓↓↓ 【可选】指定源码分支，默认为master，设置为dev可使用dev分支 ↓↓↓
       - BRANCH=dev
     restart: "no"
     depends_on:
