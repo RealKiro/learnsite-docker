@@ -5,6 +5,7 @@ services:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: mssql
     restart: unless-stopped
+    user: root
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=YourStrong@Passw0rd123
