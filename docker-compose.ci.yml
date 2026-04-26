@@ -6,12 +6,12 @@ services:
     container_name: mssql-ci
     user: root
     # ===== 网络模式选择 =====
-    # 默认使用 host 模式，容器直接使用宿主机网络
-    # 如果端口被占用，请切换到 bridge 模式
-    network_mode: host
-    # network_mode: bridge
-    # ports:
-    #   - "1433:1433"
+    # 默认使用 bridge 模式，使用自定义网络
+    # 如果需要 host 模式，请取消下面 network_mode 的注释，并注释掉 networks 和 ports
+    # network_mode: host
+    network_mode: bridge
+    ports:
+      - "1433:1433"
     environment:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
@@ -34,20 +34,18 @@ services:
     image: ${DOCKER_USERNAME}/learnsite-web:dev
     container_name: learnsite-ci
     # ===== 网络模式选择 =====
-    # 默认使用 host 模式，容器直接使用宿主机网络
-    # 如果端口被占用，请切换到 bridge 模式
-    network_mode: host
-    # network_mode: bridge
-    # ports:
-    #   - "8080:8080"
+    # 默认使用 bridge 模式，使用自定义网络
+    # 如果需要 host 模式，请取消下面 network_mode 的注释，并注释掉 networks 和 ports
+    # network_mode: host
+    network_mode: bridge
+    ports:
+      - "8080:8080"
     volumes:
       - learnsite_data:/app
     environment:
       - MONO_IOMAP=all
-      # 数据库连接地址：host模式下使用127.0.0.1，bridge模式下使用服务名mssql
-      - DB_HOST=127.0.0.1
-      # bridge模式时取消注释：
-      # - DB_HOST=mssql
+      # 数据库连接地址：bridge模式下使用服务名mssql
+      - DB_HOST=mssql
       - DB_NAME=learnsite
       - DB_USER=sa
       - DB_PASSWORD=${DB_PASSWORD}
