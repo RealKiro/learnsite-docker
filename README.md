@@ -225,8 +225,9 @@ bash <(curl -L https://gitee.com/realiy/learnsite-docker/raw/main/deploy.sh) --h
 ### 首次访问
 
 1. 部署完成后，访问 http://localhost:8080
-2. 默认管理员账号请参考 LearnSite 官方文档
-3. 首次登录后请及时修改密码
+2. 默认管理员账号：admin
+3. 默认密码：12345
+4. 首次登录后请及时修改密码
 
 ### 数据持久化
 
@@ -319,6 +320,7 @@ learnsite-docker/
 
 - 项目地址：https://gitee.com/realiy/learnsite-docker
 - LearnSite 官网：https://gitee.com/nylon26/openlearnsite
+- 详细部署教程：https://www.aino.fun/archives/learnsite-guide
 
 ---
 
